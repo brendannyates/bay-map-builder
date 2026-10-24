@@ -185,6 +185,15 @@ t('a row of bays along one wall all face the same way, end bays too', () => {
   assert.deepStrictEqual(m.items.filter(i => i.k === 'bay').map(b => b.a), [0, 0, 0, 0, 0], 'bay 1 by the corner too');
   const lone = BM.newModel(); BM.newRoom(lone, 0, 0, 880, 320); assert.strictEqual(BM.newBay(lone, 76, 80).a, 0, 'a lone corner bay backs onto the long wall');
 });
+t('a bay by a curved wall backs straight onto the curve, so its chair stays clear of it', () => {
+  // The right wall bows 4 ft into the room. Before, the chair turned to a piece of the curve further round and its corner went through.
+  const { m, wall } = room(720, 416); wall.bend[1] = 64;
+  const b = BM.add(m, BM.newBay(m, 620, 300)), A = BM.arcOf([720, 0], [720, 416], 64);
+  let q = null; for (let u = 0; u <= 1; u += 0.001){ const p = A.at(u); if (!q || Math.hypot(p[0] - b.x, p[1] - b.y) < Math.hypot(q[0] - b.x, q[1] - b.y)) q = p; }
+  const toCurve = Math.atan2(q[0] - b.x, -(q[1] - b.y)) * 180 / Math.PI;   // straight at the nearest point of the curve
+  assert(Math.abs(BM.normA(b.a - toCurve)) <= 7.5, `back to the curve: a ${b.a}, nearest point at ${toCurve}`);
+  assert(!BM.check(m).some(x => /chair goes through a wall/.test(x.msg)), 'chair clear of the curve');
+});
 t('newBay keeps out of door swings; check() flags a bay put in one', () => {
   const { m } = room(600, 400), door = BM.add(m, BM.newDoor(m, [300, 396]).item), sw = BM.itemBox(m, door);
   const b = BM.newBay(m, 300, 340), cx = Math.max(sw.x0, Math.min(b.x, sw.x1)), cy = Math.max(sw.y0, Math.min(b.y, sw.y1));

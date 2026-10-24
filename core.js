@@ -457,7 +457,13 @@ const backGap = r => Math.max(r + 6, 0.55 * r + CH / 2 + 10), sideGap = r => r +
 // backs onto (a row stays in line, end bays too), then the one about a chair's depth away, on a longer wall. o = {r, skip (this bay's id)}.
 function faceWall(m, x, y, S = null, o = {}){
   const W = (S || scene(m)).walls, r = o.r || SIZES.M, ang = q => normA(Math.round(deg(Math.atan2(q[0] - x, -(q[1] - y))) / 15) * 15), all = [];
-  for (const w of W) for (let i = 1; i < w.pts.length; i++){ const s = segNear([x, y], w.pts[i - 1], w.pts[i]); all.push({ d: s.d, q: s.q, th: w.th, len: dist(w.pts[i - 1], w.pts[i]) }); }
+  // A curved wall comes as many short pieces: pieces turning less than 20° from the last are one wall, met at its nearest point,
+  // so the chair backs straight onto the curve instead of onto a piece further round it.
+  for (const w of W){ let run = null;
+    for (let i = 1; i < w.pts.length; i++){ const a = w.pts[i - 1], b = w.pts[i], s = segNear([x, y], a, b), dir = Math.atan2(b[1] - a[1], b[0] - a[0]), len = dist(a, b);
+      if (run && Math.abs(normA(deg(dir - run.dir))) < 20){ run.len += len; run.dir = dir; if (s.d < run.d){ run.d = s.d; run.q = s.q; } }
+      else { if (run) all.push(run); run = { d: s.d, q: s.q, th: w.th, len, dir }; } }
+    if (run) all.push(run); }
   if (!all.length) return 0;
   const d0 = Math.min(...all.map(c => c.d)); if (d0 < 1e-6) return 0;
   const by = new Map();
