@@ -1807,7 +1807,7 @@ function boot(){
   setModel(m || BM.newModel('New bay map'), true);
   setTool('select'); S.saved = 'ok'; updStatus();
   requestAnimationFrame(() => { if (S.m.items.length || S.trace) fit(); else { S.view = { k: 1, x: 40, y: 40 }; updZoom(); paint(); } });
-  if (!store.get(LS.coach)) startCoach();
+  if (!store.get(LS.coach) && !FROM_ESK) startCoach();   // from the tracker there is already a map; the tips would cover it (? › tips again)
   connectHost();
 }
 boot();
