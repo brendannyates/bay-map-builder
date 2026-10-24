@@ -539,11 +539,13 @@ function pairUp(X, free, spots, pick){
 }
 
 // ---------- layout ----------
-let memo = { key: '', val: null };
+// The last few results, keyed by the model's JSON: the page asks for the same model many times per frame, and check()
+// asks for a cleaned copy too.
+const memo = [];
 // Everything automatic, resolved: chair, table, lantern and tag per bay, curtain bay links, and the map box.
 // Returns {box:{x,y,w,h}, tag:[w,h], bays: Map(bay id → {chair:[x,y,a], table, lamp, tag}), curtains: Map(curtain id → [bay ids])}.
 function layout(m){
-  const key = JSON.stringify(m); if (memo.key === key) return memo.val;
+  const key = JSON.stringify(m), got = memo.find(x => x.key === key); if (got) return got.val;
   const S = scene(m), bays = m.items.filter(i => i.k === 'bay');
   const B = bays.map(b => ({ b, p: bayParts(S, b) }));
   const bb = contentBox(m, S, B), box = { x0: bb.x0 - PAD, y0: bb.y0 - PAD, x1: bb.x1 + PAD, y1: bb.y1 + PAD };
@@ -553,7 +555,7 @@ function layout(m){
   const out = { box: { x: box.x0, y: box.y0, w: box.x1 - box.x0, h: box.y1 - box.y0 }, tag: [tw, th], bays: new Map(), curtains: new Map() };
   B.forEach((o, i) => out.bays.set(o.b.id, { ...o.p, tag: X.tags[i] }));
   for (const c of m.items) if (c.k === 'curtain' || (c.k === 'path' && c.layer === 'curtain')) out.curtains.set(c.id, c.bays ? c.bays.filter(id => bays.some(b => b.id === id)) : autoCurtainBays(m, c, S));
-  memo = { key, val: out };
+  memo.unshift({ key, val: out }); if (memo.length > 4) memo.pop();
   return out;
 }
 // Bounds of everything drawn (tags excluded; they are fitted inside afterwards).
@@ -622,16 +624,42 @@ function snap(m, p, o = {}){
 }
 
 // ---------- making things ----------
-// A closed rectangular room (clockwise, so doors swing inward by default) plus its name. Adds both; returns [wall, label] or null if too small.
+// The parts of a→b that no straight wall already runs along (so rooms drawn side by side share one wall, and a door
+// between them cuts the only wall there). Returns [[from, to], …] in order.
+function uncovered(m, a, b){
+  const L = dist(a, b), u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], cov = [];
+  for (const w of wallLines(m)) for (let i = 1; i < w.pts.length; i++){
+    const p = w.pts[i - 1], q = w.pts[i], v = [q[0] - p[0], q[1] - p[1]], lv = hyp(v[0], v[1]);
+    if (lv < 1 || Math.abs(cross(u, v)) / lv > 0.02 || Math.abs(cross(u, [p[0] - a[0], p[1] - a[1]])) > 1.5) continue;
+    const t0 = (p[0] - a[0]) * u[0] + (p[1] - a[1]) * u[1], t1 = (q[0] - a[0]) * u[0] + (q[1] - a[1]) * u[1];
+    const lo = Math.max(0, Math.min(t0, t1)), hi = Math.min(L, Math.max(t0, t1)); if (hi - lo > 1) cov.push([lo, hi]);
+  }
+  cov.sort((x, y) => x[0] - y[0]); const out = []; let at = 0;
+  for (const [lo, hi] of cov){ if (lo > at + 1) out.push([at, lo]); at = Math.max(at, hi); }
+  if (at < L - 1) out.push([at, L]);
+  const pt = t => [rnd(a[0] + u[0] * t), rnd(a[1] + u[1] * t)];
+  return out.map(([s, e]) => [s < 1e-9 ? a : pt(s), e > L - 1e-9 ? b : pt(e)]);
+}
+// A rectangular room (clockwise, so doors swing inward by default) plus its name. Sides that an existing wall already covers
+// are left out, so the room may come out as one or more open walls. Adds them; returns [wall, label, …more walls], or null
+// if the box is too small or all its walls are already there.
 function newRoom(m, x0, y0, x1, y1, name){
   const [ax, bx] = [Math.min(x0, x1), Math.max(x0, x1)], [ay, by] = [Math.min(y0, y1), Math.max(y0, y1)];
   if (bx - ax < 32 || by - ay < 32) return null;
   const S = scene(m), cx = (ax + bx) / 2, above = [cx, ay - 24];
   const roomy = S.walls.every(w => distPoly(above, w.pts) > 28) && S.labels.every(l => boxDist(above, l.box) > 12);
-  const n = m.items.filter(i => i.k === 'label').length + 1;
-  const wall = add(m, { id: '', k: 'wall', pts: [[ax, ay], [bx, ay], [bx, by], [ax, by]], bend: [0, 0, 0, 0], closed: true, thin: false });
+  const n = m.items.filter(i => i.k === 'label').length + 1, C = [[ax, ay], [bx, ay], [bx, by], [ax, by]];
+  const parts = C.map((p, i) => uncovered(m, p, C[(i + 1) % 4])), whole = parts.every((P, i) => P.length === 1 && P[0][0] === C[i] && P[0][1] === C[(i + 1) % 4]);
+  let lines = [];
+  if (whole) lines = [C];
+  else {
+    for (const [s, e] of parts.flat()){ const L = lines[lines.length - 1]; if (L && dist(L[L.length - 1], s) < 0.01) L.push(e); else lines.push([s, e]); }
+    if (lines.length > 1 && dist(lines[lines.length - 1].slice(-1)[0], lines[0][0]) < 0.01) lines[0] = [...lines.pop(), ...lines[0].slice(1)];
+  }
+  if (!lines.length) return null;
+  const walls = lines.map(pts => add(m, { id: '', k: 'wall', pts: pts.map(p => [p[0], p[1]]), bend: pts.map(() => 0), closed: whole, thin: false }));
   const label = add(m, { id: '', k: 'label', t: name || `Room ${n}`, x: cx, y: roomy ? ay - 24 : ay + 24, small: false });
-  return [wall, label];
+  return [walls[0], label, ...walls.slice(1)];
 }
 // A wall or curtain from points (straight segments). Not added.
 const newLine = (k, pts, closed = false) => k === 'curtain' ? { id: '', k, pts: clone(pts), bend: pts.map(() => 0), bays: null, rev: false }
@@ -751,6 +779,13 @@ function removeVertex(m, id, i){
 function moveVertex(m, id, i, p){ const w = byId(m, id); if (w && w.pts && w.pts[i]) w.pts[i] = [p[0], p[1]]; return m; }
 
 // ---------- hit testing ----------
+// Which segment of a wall or curtain is nearest p (curves included): {seg, d, q} or null. The page uses it to add corners.
+function nearSeg(it, p){
+  let best = null;
+  for (const g of segsOf(it)){ const pts = segPts(g);
+    for (let i = 1; i < pts.length; i++){ const r = segNear(p, pts[i - 1], pts[i]); if (!best || r.d < best.d) best = { seg: g.i, d: r.d, q: r.q }; } }
+  return best;
+}
 // Bounding box of an item in drawing units (bays include their chair and table).
 function itemBox(m, it, L = null){
   if (it.k === 'wall' || it.k === 'curtain') return inflate(bbox(polyOf(it)), it.k === 'wall' ? (it.thin ? THIN : WALL) / 2 : 3);
@@ -765,7 +800,7 @@ function hit(m, p, tol = 6){
   const L = layout(m), rank = { label: 0, door: 1, window: 1, chair: 2, table: 2, counter: 3, desk: 3, sink: 3, cabinet: 3, bay: 4, curtain: 5, wall: 6, path: 7 };
   const near = it => {
     if (it.k === 'label') return inBox(p, inflate(labelBox(it), tol));
-    if (isOpening(it)){ const d = it.k === 'door' ? doorD(m, it) || windowD(m, it) : windowD(m, it); return !!d && (flattenPath(d).some(pl => distPoly(p, pl) <= tol + 2) || inBox(p, itemBox(m, it, L))); }
+    if (isOpening(it)){ const d = (it.k === 'door' ? doorD(m, it) : '') + windowD(m, it); return !!d && (flattenPath(d).some(pl => distPoly(p, pl) <= tol + 5) || inBox(p, itemBox(m, it, L))); }   // the gap in the wall counts, so a door can be grabbed where it cuts the wall
     if (it.k === 'bay'){ const x = L.bays.get(it.id); return dist(p, [it.x, it.y]) <= it.r + tol || (x && (inShape(chairShape(x.chair), p[0], p[1], tol) || (x.table && dist(p, x.table.c) <= x.table.c[2] + tol))); }
     if (it.k === 'wall') return distPoly(p, polyOf(it)) <= (it.thin ? THIN : WALL) / 2 + tol;
     if (it.k === 'curtain') return distPoly(p, polyOf(it)) <= tol + 2;
@@ -985,6 +1020,6 @@ const BM = { UNIT, GRID, PAD, WALL, THIN, SIZES, FURN, NAMES, BAY_RE,
   doorD, windowD, wallD, wallAt, doorFit, hingeFor, newDoor, openingSeg,
   wallLines, faceWall, nudgeBay, newBay, autoBay, autoCurtainBays, tagSize, layout, snap,
   newRoom, newLine, newItem, hugWall, moveItems, moveModel, rotateItems, remove, paste, dup, insertVertex, removeVertex, moveVertex,
-  itemBox, hit, marquee, itemName, planOf, exportPlan, importPlan, check, canSave, templates, history, fmtFt, parseFt, normA };
+  itemBox, nearSeg, hit, marquee, itemName, planOf, exportPlan, importPlan, check, canSave, templates, history, fmtFt, parseFt, normA };
 if (typeof module !== 'undefined' && module.exports) module.exports = BM; else root.BM = BM;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

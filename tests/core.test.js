@@ -204,6 +204,16 @@ t('newRoom: clockwise walls, label above when there is space, inside when anothe
   const [, l2] = BM.newRoom(m, 100, 300, 400, 500, 'Office'); assert.strictEqual(l2.y, 324); assert.strictEqual(l2.t, 'Office');
   assert.strictEqual(BM.newRoom(m, 0, 0, 10, 10), null);
 });
+t('newRoom: rooms drawn side by side share one wall, so a door between them cuts the only wall there', () => {
+  const m = BM.newModel(), [a] = BM.newRoom(m, 0, 0, 400, 300, 'A'), [b, , extra] = BM.newRoom(m, 400, 0, 720, 300, 'B');
+  assert.deepStrictEqual(b.pts, [[400, 0], [720, 0], [720, 300], [400, 300]], 'a U: top, right, bottom; the shared side is left out');
+  assert.strictEqual(b.closed, false); assert.strictEqual(extra, undefined);
+  const d = BM.newDoor(m, [400, 150]); assert.strictEqual(d.item.wall, a.id); BM.add(m, d.item);
+  assert.strictEqual(BM.wallD(m, a), 'M400 174L400 300L0 300L0 0L400 0L400 126', 'the door cuts the shared wall');
+  const [c] = BM.newRoom(m, 720, 100, 960, 500, 'C');   // taller than B: only the part beside B is shared
+  assert.deepStrictEqual(c.pts, [[720, 100], [960, 100], [960, 500], [720, 500], [720, 300]], 'drawn down to where B’s wall starts');
+  assert.strictEqual(BM.newRoom(m, 0, 0, 400, 300), null, 'every side already drawn');
+});
 t('counters, sinks and cabinets dropped by a wall sit flat against it', () => {
   const { m } = room(400, 300), k = BM.newItem(m, 'counter', 200, 270);
   assert.deepStrictEqual([k.x, k.y, k.a], [200, 300 - 4 - 16 - 1, 0]);

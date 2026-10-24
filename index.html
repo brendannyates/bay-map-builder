@@ -1,0 +1,1799 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bay Map Builder</title>
+<!-- Copied from ESK Tracker (src/taskpane.html) so the builder and its Preview look exactly like the tracker. Keep in step. -->
+<style id="tok">
+/* ===== foundation: fonts ===== */
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:url(assets/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:500;font-display:swap;src:url(assets/fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:swap;src:url(assets/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2")}
+/* ===== foundation: tokens (old variable names kept) ===== */
+:root{
+  color-scheme:light;
+  --bg:#F3F4F1;--surface:#FFFFFF;--surface2:#E9EBE6;--surface3:#F7F8F5;
+  --ink:#1B211F;--muted:#616B66;--faint:#A3ABA6;--line:#E2E5DF;
+  --accent:#1E6B59;--accent-ink:#FFFFFF;--accent-soft:#DDEDE6;
+  --ok:#1E6B59;--ok-soft:#DDEDE6;--warn:#8F5400;--warn-soft:#FAE9CF;
+  --bad:#B3261E;--bad-ink:#FFFFFF;--bad-soft:#F9DCD9;--info:#3D5E78;--info-soft:#E3EAF0;
+  --radius:12px;--shadow:0 1px 2px rgba(16,24,20,.05),0 12px 32px -14px rgba(16,24,20,.14);
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,Consolas,monospace;
+  --scrim:rgba(16,24,20,.30);--wash:rgba(243,244,241,.6);
+  --s1:#2a78d6;--s2:#eb6834;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#131716;--surface:#1B2220;--surface2:#252D2A;--surface3:#182019;--ink:#ECEFED;--muted:#9BA59F;--faint:#5C6763;--line:#2C3532;
+  --accent:#6DC4A6;--accent-ink:#0E2A22;--accent-soft:#1D3A31;--ok:#6DC4A6;--ok-soft:#1D3A31;--warn:#E9B150;--warn-soft:#3A2D13;
+  --bad:#F19189;--bad-ink:#3A0F0C;--bad-soft:#43211E;--info:#9DBAD3;--info-soft:#1F2B35;
+  --shadow:0 0 0 1px rgba(255,255,255,.05),0 12px 32px -14px rgba(0,0,0,.6);
+  --scrim:rgba(0,0,0,.45);--wash:rgba(19,23,22,.6);
+  --s1:#3987e5;--s2:#d95926;}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#131716;--surface:#1B2220;--surface2:#252D2A;--surface3:#182019;--ink:#ECEFED;--muted:#9BA59F;--faint:#5C6763;--line:#2C3532;
+  --accent:#6DC4A6;--accent-ink:#0E2A22;--accent-soft:#1D3A31;--ok:#6DC4A6;--ok-soft:#1D3A31;--warn:#E9B150;--warn-soft:#3A2D13;
+  --bad:#F19189;--bad-ink:#3A0F0C;--bad-soft:#43211E;--info:#9DBAD3;--info-soft:#1F2B35;
+  --shadow:0 0 0 1px rgba(255,255,255,.05),0 12px 32px -14px rgba(0,0,0,.6);
+  --scrim:rgba(0,0,0,.45);--wash:rgba(19,23,22,.6);
+  --s1:#3987e5;--s2:#d95926;}
+</style>
+<style id="base">
+/* ===== foundation: base ===== */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.45 var(--font);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+h1{margin:0;font-size:24px;line-height:1.2;font-weight:600;letter-spacing:-.015em}
+h2{margin:0 0 6px;font-size:13px;font-weight:500;color:var(--muted)}
+h3{margin:14px 0 8px;font-size:17px;line-height:1.3;font-weight:600;letter-spacing:-.01em}
+h3:first-child{margin-top:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.muted{color:var(--muted)} .small{font-size:13px} .faint{color:var(--faint)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+</style>
+<style id="ctl">
+/* ===== foundation: buttons ===== */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 18px;border:0;border-radius:12px;background:var(--surface2);color:var(--ink);font-weight:500;line-height:1.2;text-align:center;text-decoration:none;cursor:pointer;transition:background .2s ease,opacity .2s ease}
+.btn:hover{background:color-mix(in srgb,var(--surface2),var(--ink) 7%)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{background:color-mix(in srgb,var(--accent),var(--ink) 14%)}
+.btn.primary.late,.btn.bad{background:var(--bad);color:var(--bad-ink)}
+.btn.primary.late:hover,.btn.bad:hover{background:color-mix(in srgb,var(--bad),var(--ink) 14%)}
+.btn.ghost{background:transparent;color:var(--accent);padding:0 12px}
+.btn.ghost:hover{background:var(--surface2)}
+.btn.ghost.mute{color:var(--muted)}
+.btn.sm{min-height:38px;padding:0 12px;font-size:14px}
+.btn.lg{min-height:52px;padding:0 24px;font-size:16px}
+.btn.inline{min-height:0;padding:0;background:none;color:inherit;border-radius:4px;text-decoration:underline dotted;text-underline-offset:3px}
+.btn.inline:hover{background:none;color:var(--accent)}
+.btn:disabled,.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn:disabled:hover{background:var(--surface2)} .btn.primary:disabled:hover{background:var(--accent)} .btn.ghost:disabled:hover{background:transparent}
+@media (max-width:899px){.btn{min-height:40px;padding:0 14px}.btn.sm{min-height:34px;padding:0 10px}.btn.lg{min-height:48px;padding:0 20px}.btn.ghost{padding:0 10px}.btn.inline{min-height:0;padding:0}}
+.linkbtn{display:inline-flex;align-items:center;min-height:32px;background:none;border:0;color:var(--accent);font-weight:500;cursor:pointer;padding:4px 2px;font-size:14px;border-radius:6px}
+.linkbtn:hover{text-decoration:underline;text-underline-offset:3px}
+/* ===== foundation: fields ===== */
+input.fld,select.fld,textarea.fld{width:100%;min-height:44px;padding:10px 12px;border:0;border-radius:12px;background:var(--bg);color:var(--ink)}
+textarea.fld{line-height:1.45}
+input.fld::placeholder,textarea.fld::placeholder{color:var(--muted)}
+input.fld:focus,select.fld:focus,textarea.fld:focus{outline:2px solid var(--accent);outline-offset:0}
+.card input.fld:not(.search),.card select.fld,.card textarea.fld,.sheet input.fld,.sheet select.fld,.sheet textarea.fld{background:var(--bg)}
+.ro{background:var(--surface2)!important;color:var(--muted)}
+label.lbl{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px;font-weight:400}
+label.lbl:first-child{margin-top:0}
+.check{display:flex;align-items:center;gap:14px;min-height:50px;cursor:pointer}
+.check input{flex:none;width:22px;height:22px;margin:0;accent-color:var(--accent)}
+.check .l{flex:1;min-width:0} .check .l small{display:block;color:var(--muted);font-size:13px}
+.check+.check{border-top:1px solid var(--line)}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
+
+/* ===== foundation: segmented controls ===== */
+.seg{display:inline-flex;gap:6px;flex-wrap:wrap;border:0;background:transparent}
+.seg button{min-height:40px;padding:0 14px;border:0;border-radius:10px;background:var(--surface2);color:var(--ink);font-size:14px;font-weight:500;cursor:pointer}
+.seg button:hover{background:color-mix(in srgb,var(--surface2),var(--ink) 7%)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+/* ===== foundation: messages, stats, tiles ===== */
+.msg{border:0;border-radius:12px;padding:12px 14px;margin:8px 0;font-size:14px;display:flex;gap:8px;align-items:flex-start}
+.msg.fresh{display:block}
+.msg.ok{background:var(--ok-soft);color:var(--ok)} .msg.bad{background:var(--bad-soft);color:var(--bad)} .msg.warn{background:var(--warn-soft);color:var(--warn)} .msg.info{background:var(--info-soft);color:var(--info)}
+.msg b{color:inherit}
+</style>
+<style id="eskMap">
+/* ===== foundation: cards and flat sections ===== */
+.card{background:var(--surface);border:0;border-radius:16px;box-shadow:var(--shadow);padding:20px 22px;margin:0 0 16px}
+.card h2{margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:4px}
+.card h2 .sp{flex:1}
+.card .card{background:var(--surface3);box-shadow:none;border-radius:12px;padding:14px 16px}
+@media (max-width:899px){.card{padding:14px;border-radius:14px;margin-bottom:12px}}
+/* bay map: collapsible floor plan of the two treatment rooms (CFG.bayMap keeps it open or closed per user) */
+.pg-today .bmap{padding:4px 18px;margin-bottom:18px}
+.pg-today .bmap>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;min-height:44px;font-weight:600}
+.pg-today .bmap>summary::-webkit-details-marker{display:none}
+.pg-today .bmap>summary::after{content:"▸";color:var(--faint);font-weight:400}
+.pg-today .bmap[open]>summary::after{content:"▾"}
+.pg-today .bmap>summary .muted{font-weight:400;font-size:13px}
+.pg-today .bmap[open]{padding-bottom:14px}
+.bplan{position:relative;aspect-ratio:808/392;container-type:inline-size;margin-top:4px}
+.bplan svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;pointer-events:none}
+.bplan .wall{stroke:var(--ink);stroke-width:8;fill:none;stroke-linecap:square}
+.bplan .wall.thin{stroke-width:4.5}
+.bplan .window .wf{stroke:var(--ink);stroke-width:8;fill:none}
+.bplan .window .wg{stroke:var(--surface);stroke-width:4;fill:none}
+.bplan{--lamp:#FFD38A;--lamp-edge:#C98A2B;--glow:#FFC56B;--glow-a:.75}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bplan{--lamp-edge:#E9B150;--glow:#FFB547;--glow-a:.6}}
+:root[data-theme="dark"] .bplan{--lamp-edge:#E9B150;--glow:#FFB547;--glow-a:.6}
+.bplan .curtain path{fill:none;stroke-linejoin:round}
+.bplan .curtain .crail{stroke:var(--faint);stroke-width:1.25;stroke-dasharray:3 3}
+.bplan .curtain .fabric{stroke:var(--muted);stroke-width:5.5;stroke-linecap:round;stroke-dasharray:0 7}
+.bplan .curtain .bunch{stroke:var(--muted);stroke-width:11;stroke-linecap:butt;stroke-dasharray:1.4 1.4 1.4 1.4 1.4 1.4 1.4 1.4 1.4 1.4 0 86}
+.bplan .lantern .body{fill:var(--surface);stroke:var(--muted);stroke-width:1.5}
+.bplan .lantern .lens{fill:var(--surface2)}
+.bplan .lantern .touch{fill:var(--muted)}
+.bplan .lantern.on .body{stroke:var(--lamp-edge)}
+.bplan .lantern.on .lens{fill:var(--lamp)}
+.bplan .lantern.on .touch{fill:var(--lamp-edge)}
+.bplan .door{stroke:var(--faint);stroke-width:1.75;fill:none}
+.bplan .table{fill:var(--surface3);stroke:var(--faint);stroke-width:1.75}
+.bplan .seat{fill:var(--surface);stroke:var(--muted);stroke-width:1.75}
+.bplan .back,.bplan .arm{fill:var(--surface2);stroke:var(--muted);stroke-width:1.5}
+.bplan .room{position:absolute;transform:translate(-50%,-50%);font-size:clamp(10px,1.6cqw,12.5px);font-weight:600;color:var(--muted);white-space:nowrap}
+.bplan .room.small{font-weight:500;font-size:clamp(9px,1.3cqw,11px)}
+.bplan .bay{position:absolute;aspect-ratio:1;border-radius:50%;--rw:2px;--rc:var(--surface2);background:var(--surface3);box-shadow:inset 0 0 0 var(--rw) var(--rc);transition:box-shadow .2s,background .2s,filter .2s}
+.bplan .bay[data-state="open"]{background:transparent;box-shadow:none;border:2px dashed var(--faint)}
+.bplan .bay[data-state="track"]{background:var(--surface2);--rc:var(--faint);--rw:2.5px}
+.bplan .bay[data-state="soon"]{background:var(--warn-soft);--rc:var(--warn);--rw:3px}
+.bplan .bay[data-state="late"]{background:var(--bad-soft);--rc:var(--bad);--rw:3.5px}
+.bplan .bay[data-state="ready"]{background:var(--accent-soft);--rc:var(--accent);--rw:3px}
+.bplan .bay:hover{filter:brightness(.96)}
+.bplan .bay[aria-current="true"]{box-shadow:inset 0 0 0 var(--rw) var(--rc),0 0 0 3px var(--surface),0 0 0 5px var(--ink)}
+.bplan .bay[data-state="open"][aria-current="true"]{box-shadow:0 0 0 3px var(--surface),0 0 0 5px var(--ink)}
+/* Dark: the tags sit on the same surface as the card, so they get a lighter fill and an outline in the bay's state colour */
+.bplan{--tag-bg:var(--surface);--tag-line:transparent}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bplan{--tag-bg:#2C3632;--tag-line:rgba(255,255,255,.18)}
+  :root:not([data-theme="light"]) .bplan .btag[data-state="soon"]{--tag-line:var(--warn)}:root:not([data-theme="light"]) .bplan .btag[data-state="late"]{--tag-line:var(--bad)}:root:not([data-theme="light"]) .bplan .btag[data-state="ready"]{--tag-line:var(--accent)}
+  :root:not([data-theme="light"]) .bplan .bay[data-state="track"]{--rc:var(--muted)}:root:not([data-theme="light"]) .bplan .bay[data-state="busy"]{--rc:var(--muted)}}
+:root[data-theme="dark"] .bplan{--tag-bg:#2C3632;--tag-line:rgba(255,255,255,.18)}
+:root[data-theme="dark"] .bplan .btag[data-state="soon"]{--tag-line:var(--warn)}:root[data-theme="dark"] .bplan .btag[data-state="late"]{--tag-line:var(--bad)}:root[data-theme="dark"] .bplan .btag[data-state="ready"]{--tag-line:var(--accent)}
+:root[data-theme="dark"] .bplan .bay[data-state="track"]{--rc:var(--muted)}:root[data-theme="dark"] .bplan .bay[data-state="busy"]{--rc:var(--muted)}
+.bplan .btag{position:absolute;transform:translate(-50%,-50%);pointer-events:none;background:var(--tag-bg);border-radius:clamp(6px,1.4cqw,11px);padding:clamp(2px,.8cqw,7px) clamp(5px,1.4cqw,11px);box-shadow:0 0 0 1.5px var(--tag-line),0 1px 2px rgba(16,24,20,.08),0 8px 18px -10px rgba(16,24,20,.35);white-space:nowrap;line-height:1.2;max-width:28cqw}
+.bplan .btag .n{font-weight:600;font-size:clamp(10px,2cqw,14px);overflow:hidden;text-overflow:ellipsis}
+.bplan .btag .num{color:var(--muted);margin-right:.4em}
+.bplan .btag .s{display:flex;align-items:center;gap:5px;margin-top:2px;font-size:clamp(9px,1.75cqw,12.5px);color:var(--muted);overflow:hidden}
+.bplan .btag .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.bplan .btag[data-state="track"] .dot{background:var(--muted)}
+.bplan .btag[data-state="ready"] .dot{background:var(--accent)} .bplan .btag[data-state="ready"] .s{color:var(--accent);font-weight:600}
+.bplan .btag[data-state="soon"] .dot{background:var(--warn)} .bplan .btag[data-state="soon"] .s{color:var(--warn);font-weight:600}
+.bplan .btag[data-state="late"] .dot{background:var(--bad)} .bplan .btag[data-state="late"] .s{color:var(--bad);font-weight:600}
+.bplan .btag[data-state="open"] .n{color:var(--muted)}
+.bplan .btag .tx{overflow:hidden;text-overflow:ellipsis}
+@container (max-width:560px){.bplan .btag .tx{display:none}.bplan .btag .s{margin-top:1px}}
+.pg-today .bmap{container:bmap / inline-size}
+.bwrap{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);grid-template-areas:"map panel" "next panel";gap:0 18px;align-items:start}
+.bwrap>.bleft{grid-area:map}.bwrap>.bpanel{grid-area:panel}.bwrap>.bnext{grid-area:next}
+@container bmap (max-width:820px){.bwrap{grid-template-columns:minmax(0,1fr);grid-template-areas:"map" "panel" "next"}.bwrap>.bpanel{margin-top:14px}}
+.bpanel{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--surface);display:flex;flex-direction:column;gap:10px}
+.bpanel .bph{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.bpanel .name{font-weight:600;font-size:18px}
+.bpanel .bayno{margin-left:8px;font-weight:400;font-size:13px;color:var(--muted)}
+.bpanel .meta,.bpanel .body{color:var(--muted);margin:0}
+.bpanel .lead{margin:0}
+.bpanel .row{display:flex;gap:6px;flex-wrap:wrap}
+.bkey{display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--muted)}
+.bkey li{display:flex;align-items:center;gap:7px}
+.bkey .bsw{flex:none;width:14px;height:14px;border-radius:50%;background:var(--surface3);box-shadow:inset 0 0 0 2px var(--surface2)}
+.bkey .bsw[data-k="open"]{background:transparent;box-shadow:none;border:1.5px dashed var(--faint)}
+.bkey .bsw[data-k="track"]{background:var(--surface2);box-shadow:inset 0 0 0 2px var(--faint)}
+.bkey .bsw[data-k="soon"]{background:var(--warn-soft);box-shadow:inset 0 0 0 2px var(--warn)}
+.bkey .bsw[data-k="late"]{background:var(--bad-soft);box-shadow:inset 0 0 0 2px var(--bad)}
+.bkey .bsw[data-k="ready"]{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+.bplan .bay[data-state="busy"]{background:repeating-linear-gradient(45deg,var(--surface2) 0 6px,transparent 6px 12px);--rc:var(--faint)}
+.bplan .btag[data-state="busy"] .n{color:var(--muted)}
+.bkey .bsw[data-k="busy"]{background:repeating-linear-gradient(45deg,var(--surface2) 0 3px,transparent 3px 6px);box-shadow:inset 0 0 0 2px var(--faint)}
+.bpanel .pvits{display:grid;gap:6px}
+.bpanel .pvit{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:baseline;padding:6px 0;border-top:1px solid var(--line)}
+.bpanel .pvit .pl{font-weight:600;font-size:13px}
+.bpanel .lead.ready{color:var(--accent)}.bpanel .lead.late{color:var(--bad)}.bpanel .lead.soon{color:var(--warn)}
+.bmap .boff{margin:10px 0 0;font-size:13px;color:var(--muted)}
+.bmap .boff .btn.inline{color:var(--warn)}
+</style>
+<style>
+/* ===== builder: shell ===== */
+:root{--railw:164px;--inspw:320px}
+@media (max-width:1279px){:root{--railw:150px;--inspw:296px}}
+html,body{height:100%;overflow:hidden}
+.ic{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.app{display:grid;grid-template-rows:auto minmax(0,1fr);height:100vh;height:100dvh;min-width:1000px}
+.top{display:flex;align-items:center;gap:6px;padding:10px 16px;min-width:0}
+.mark{flex:none;width:40px;height:40px;margin-right:6px;border-radius:12px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center}
+.mark .ic{width:24px;height:24px;stroke-width:1.9}
+@media (max-width:1179px){.mark{display:none}}
+.ttl{display:flex;flex-direction:column;justify-content:center;min-width:0;flex:0 1 auto;margin-right:12px}
+.nmrow{display:flex;align-items:center;gap:8px;min-width:0}
+input.nm,input.cl{border:0;border-radius:8px;background:transparent;min-width:0;text-overflow:ellipsis}
+input.nm{field-sizing:content;width:220px;min-width:120px;max-width:340px;height:32px;padding:0 8px;margin-left:-8px;font-size:17px;font-weight:600;letter-spacing:-.01em}
+input.cl{field-sizing:content;width:90px;min-width:64px;max-width:130px;height:28px;padding:0 9px;font-size:13px;color:var(--muted);background:var(--surface2)}
+input.nm:hover{background:var(--surface2)}
+input.nm:focus,input.cl:focus{background:var(--surface);outline:2px solid var(--accent);outline-offset:0}
+input.nm::placeholder,input.cl::placeholder{color:var(--muted);font-weight:400}
+.status{display:flex;align-items:center;gap:7px;min-height:18px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.status i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.status.pend i{background:var(--faint)} .status.fail{color:var(--bad)} .status.fail i{background:var(--bad)} .status.dirty i{background:var(--warn)}
+.tabs{flex:none;display:inline-flex;gap:2px;padding:3px;border-radius:13px;background:var(--surface2)}
+.tabs button{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 18px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-weight:500;cursor:pointer}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.tabs .cnt{min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:12px;font-weight:600;line-height:1;display:inline-grid;place-items:center;background:var(--warn-soft);color:var(--warn)}
+.tabs .cnt.bad{background:var(--bad);color:var(--bad-ink)}
+.top .sp{flex:1 1 0;min-width:4px}
+.ib{flex:none;width:44px;height:44px;padding:0;border:0;border-radius:12px;background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer}
+.ib:hover{background:var(--surface2)} .ib:disabled{opacity:.32;cursor:default} .ib:disabled:hover{background:transparent}
+.top .btn{flex:none;white-space:nowrap} .top .btn .ic{width:18px;height:18px}
+.top .vsep{flex:none;width:1px;height:24px;margin:0 6px;background:var(--line)}
+.work{display:grid;grid-template-columns:var(--railw) minmax(0,1fr) var(--inspw);gap:12px;padding:0 16px 16px;min-height:0}
+.work.pvmode{grid-template-columns:320px minmax(0,1fr)}
+.work.pvmode>.rail,.work.pvmode>.stage,.work.pvmode>.insp{display:none}
+kbd{font:500 11.5px/1 var(--font);color:var(--muted);padding:4px 6px;border-radius:6px;background:var(--surface2);white-space:nowrap}
+
+/* ===== builder: tool rail ===== */
+.rail{display:flex;flex-direction:column;gap:2px;min-height:0;overflow-y:auto;padding:4px;margin:-2px;scrollbar-width:thin}
+.tool{flex:none;display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 8px 0 11px;border:0;border-radius:12px;background:transparent;color:var(--muted);font-size:14px;font-weight:500;text-align:left;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.tool:hover{background:var(--surface2);color:var(--ink)}
+.tool[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.tool[aria-pressed="true"] .ic{color:var(--accent)}
+.tool span{overflow:hidden;text-overflow:ellipsis}
+.tool kbd{margin-left:auto;color:var(--faint);background:transparent;padding:4px 2px}
+.tool.hl{box-shadow:0 0 0 2px var(--accent);color:var(--ink)}
+.rail hr{flex:none;width:calc(100% - 20px);height:1px;margin:6px 10px;border:0;background:var(--line)}
+
+/* ===== builder: canvas ===== */
+.stage{position:relative;min-width:0;min-height:0;border-radius:16px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
+.stage:has(#cv:focus-visible){box-shadow:var(--shadow),0 0 0 2px var(--accent)}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;outline:none}
+.stage[data-cur="draw"] #cv{cursor:crosshair} .stage[data-cur="grab"] #cv{cursor:grab} .stage[data-cur="grabbing"] #cv{cursor:grabbing}
+.stage[data-cur="move"] #cv{cursor:move} .stage[data-cur="no"] #cv{cursor:not-allowed}
+.gmin{stroke:var(--line);stroke-width:1;fill:none;opacity:.5}
+.gmaj{stroke:var(--line);stroke-width:1;fill:none}
+/* drawn layer: the tracker's own .bplan styles, plus rugs, room names and tags drawn in SVG */
+#draw .rug{fill:var(--surface3);stroke:var(--faint);stroke-width:2;stroke-dasharray:6 5}
+#draw .rlab{font-size:13px;font-weight:600;fill:var(--muted);text-anchor:middle;dominant-baseline:central}
+#draw .rlab.small{font-size:11px;font-weight:500}
+#draw .etag rect{fill:var(--surface);stroke:color-mix(in srgb,var(--line),var(--ink) 12%);stroke-width:1.2}
+#draw .etag text{font-weight:600;fill:var(--muted)} #draw .etag .s{font-weight:400;fill:var(--faint)}
+:root[data-theme="dark"] #draw .etag rect{fill:#2C3632}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #draw .etag rect{fill:#2C3632}}
+/* editing layer: outlines, handles, guides, the line being drawn, what a click would add */
+#hud *{vector-effect:non-scaling-stroke}
+#hud .ol{fill:none;stroke:var(--accent);stroke-width:2}
+#hud .ol.hov{stroke-width:1.5;opacity:.45}
+#hud .ol.tagol{stroke-dasharray:4 3}
+#hud .stem{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:3 3}
+#hud .hv{fill:var(--surface);stroke:var(--accent);stroke-width:2}
+#hud .hv.on{fill:var(--accent)}
+#hud .hb{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+#hud .hr{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+#hud .hs{fill:var(--surface);stroke:var(--accent);stroke-width:2}
+#hud .hit{fill:transparent;stroke:none;pointer-events:all;cursor:pointer}
+#hud .hit.v,#hud .hit.tm{cursor:move} #hud .hit.b,#hud .hit.r{cursor:grab} #hud .hit.s{cursor:nwse-resize}
+#hud .bunch{fill:var(--accent)}
+#hud .guide{fill:none;stroke:var(--info);stroke-width:1;stroke-dasharray:5 4;opacity:.8}
+#hud .gpt{fill:none;stroke:var(--info);stroke-width:2}
+#hud .gline{fill:none;stroke:var(--info);stroke-width:4;opacity:.35;stroke-linecap:round}
+#hud .dwall{fill:none;stroke:var(--ink);stroke-width:8;opacity:.25;stroke-linecap:square;stroke-linejoin:miter;vector-effect:none}
+#hud .dcurt{fill:none;stroke:var(--muted);stroke-width:5.5;stroke-linecap:round;stroke-dasharray:0 7;vector-effect:none}
+#hud .draft{fill:none;stroke:var(--accent);stroke-width:1.5}
+#hud .dpt{fill:var(--surface);stroke:var(--accent);stroke-width:1.5}
+#hud .dpt.first{fill:var(--accent-soft);stroke-width:2.5}
+#hud .dim{font-weight:600;fill:var(--ink);stroke:var(--surface);stroke-width:4;paint-order:stroke;text-anchor:middle;dominant-baseline:central;stroke-linejoin:round}
+#hud .ghost{opacity:.75}
+#hud .ghost .rug{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2;stroke-dasharray:6 5;vector-effect:none;opacity:.8}
+#hud .ghost .seat,#hud .ghost .back,#hud .ghost .arm{stroke:var(--accent)}
+#hud .ghost .table{stroke:var(--accent)}
+#hud .ghost .gtag{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+#hud .gap{stroke:var(--surface);stroke-width:12;vector-effect:none}
+#hud .dsym{fill:none;stroke:var(--accent);stroke-width:2}
+#hud .gwin{stroke:var(--accent);stroke-width:4;vector-effect:none}
+#hud .gfurn{fill:var(--surface3);stroke:var(--accent);stroke-width:1.75}
+#hud .glab{fill:var(--accent);font-size:13px;font-weight:600;text-anchor:middle;dominant-baseline:central}
+#hud .mq{fill:color-mix(in srgb,var(--accent) 8%,transparent);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+#hud .scl{stroke:var(--bad);stroke-width:2;fill:none} #hud .sclp{fill:var(--bad)}
+:root[data-theme="dark"] #traceL image{filter:invert(1) hue-rotate(180deg)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #traceL image{filter:invert(1) hue-rotate(180deg)}}
+#hud .tframe{fill:none;stroke:var(--info);stroke-width:1.5;stroke-dasharray:6 4}
+.hint{position:absolute;left:14px;bottom:14px;max-width:min(560px,calc(100% - 240px));margin:0;padding:10px 14px;border-radius:12px;background:color-mix(in srgb,var(--surface2) 92%,transparent);color:var(--ink);font-size:13.5px;line-height:1.4;pointer-events:none}
+.hint:empty{display:none}
+.hint b{font-weight:600}
+.zoom{position:absolute;right:14px;bottom:14px;display:flex;align-items:center;gap:2px;padding:3px;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line),0 8px 24px -12px rgba(16,24,20,.3)}
+.zoom output{min-width:50px;text-align:center;font-size:13px;color:var(--muted)}
+.empty{position:absolute;inset:0;display:grid;place-items:start center;padding:clamp(72px,14vh,150px) 24px 24px;pointer-events:none}
+.empty>div{pointer-events:auto;max-width:440px;padding:28px 30px;border-radius:16px;text-align:center;background:color-mix(in srgb,var(--surface) 90%,transparent)}
+.empty h2{margin:0 0 8px;font-size:20px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.empty p{margin:0 0 18px;color:var(--muted)}
+.empty .row{justify-content:center;gap:10px}
+.empty .small{margin:16px 0 0}
+.coach:not([hidden])~.hint,.stage:has(.coach:not([hidden])) .hint{display:none}
+.coach{position:absolute;left:14px;bottom:14px;width:min(360px,calc(100% - 238px));min-width:270px;padding:16px 18px 14px;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line),0 18px 40px -16px rgba(16,24,20,.35)}
+.coach .steps{display:flex;gap:6px;margin-bottom:12px} .coach .steps i{flex:1;height:4px;border-radius:2px;background:var(--surface2)} .coach .steps i.on{background:var(--accent)}
+.coach .k{margin:0;font-size:12.5px;color:var(--muted)}
+.coach h3{margin:2px 0 6px;font-size:17px}
+.coach p{margin:0 0 12px;font-size:14px;line-height:1.45}
+.coach .row{gap:6px}
+#tip{position:fixed;z-index:15;max-width:300px;padding:7px 10px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.35;pointer-events:none}
+
+/* ===== builder: inspector ===== */
+.insp{display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;padding:2px 2px 8px;scrollbar-width:thin}
+.panel{flex:none;background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+.ph{display:flex;align-items:center;gap:8px;margin:-6px -6px 6px 0}
+.panel h2{flex:1;min-width:0;margin:0;font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.panel h2 small{font-size:13px;font-weight:400;color:var(--muted);margin-left:6px}
+.panel .sub{margin:0 0 4px;font-size:13.5px;color:var(--muted)}
+.panel .msg{margin:6px 0}
+.panel>.lbl,.panel .lbl{display:block;margin:16px 0 6px;font-size:13px;color:var(--muted)}
+.help{margin:6px 0 0;font-size:13px;line-height:1.4;color:var(--muted)}
+.help.bad{color:var(--bad)}
+.insp .seg{display:flex;flex-wrap:nowrap;gap:4px;width:100%}
+.insp .seg button{flex:1 1 0;min-width:0;min-height:44px;padding:0 6px;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips button{min-height:36px;padding:0 12px;border:0;border-radius:18px;background:var(--surface2);font-size:13.5px;cursor:pointer}
+.chips button:hover{background:color-mix(in srgb,var(--surface2),var(--ink) 7%)}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.acts .del{color:var(--bad)}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:14px 0 0;font-size:14px}
+.facts dt{color:var(--muted)} .facts dd{margin:0}
+.pin{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;border-top:1px solid var(--line);font-size:14px}
+.pins{margin-top:14px}
+.pin span{color:var(--muted)} .pin span b{font-weight:500;color:var(--ink)} .pin .linkbtn{white-space:nowrap;flex:none}
+.check{min-height:46px;gap:12px}
+.check .l{font-size:14.5px}
+.bays{border:0;padding:0;margin:8px 0 0}
+.bays legend{padding:0}
+.bays .check{min-height:40px}
+.dialrow{display:flex;gap:16px;align-items:center}
+.dial{flex:none;width:96px;height:96px;border-radius:50%;cursor:grab;touch-action:none}
+.dial:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.dial svg{width:100%;height:100%;display:block}
+.dial .ring{fill:var(--bg);stroke:var(--line);stroke-width:1.5}
+.dial .tick{stroke:var(--faint);stroke-width:1.5}
+.dial .dch rect{fill:var(--surface);stroke:var(--muted);stroke-width:1.5}
+.dial .dch .bk{fill:var(--surface2)}
+.dial .knob{fill:var(--accent);stroke:var(--surface);stroke-width:2.5}
+.dial .ray{stroke:var(--accent);stroke-width:2;stroke-dasharray:2 3}
+.dialv{font-weight:500;margin-bottom:6px}
+.dialrow .row{gap:6px}
+.dialrow .btn.sm{min-width:44px;min-height:40px;padding:0 10px}
+.issues{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.iss{display:flex;gap:10px;align-items:flex-start;width:100%;min-height:44px;padding:10px 12px;border:0;border-radius:12px;background:var(--bg);font-size:13.5px;line-height:1.4;text-align:left;cursor:pointer}
+.iss:hover{background:var(--surface2)}
+.iss .ic{width:18px;height:18px;margin-top:1px}
+.iss.error .ic{color:var(--bad)} .iss.warn .ic{color:var(--warn)} .iss.tip .ic{color:var(--info)}
+.iss.nolink{cursor:default}
+.ready{display:flex;gap:12px;align-items:flex-start;margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--ok-soft);color:var(--ok)}
+.ready .ic{width:22px;height:22px;stroke-width:2.2;margin-top:1px}
+.ready b{font-weight:600} .ready p{margin:2px 0 0;color:var(--ink);font-size:13.5px}
+.clsum{font-size:13px;color:var(--muted);font-weight:400}
+.everything>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;min-height:28px;font-weight:600;font-size:15px}
+.everything>summary::-webkit-details-marker{display:none}
+.everything>summary::after{content:"▸";color:var(--faint);font-weight:400;margin-left:auto}
+.everything[open]>summary::after{content:"▾"}
+.everything ul{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.everything li button{width:100%;min-height:36px;padding:0 10px;border:0;border-radius:10px;background:transparent;text-align:left;font-size:14px;cursor:pointer}
+.everything li button:hover{background:var(--surface2)}
+.everything li button[aria-current="true"]{background:var(--accent-soft)}
+.note{margin:0;font-size:13.5px}
+.range{width:100%;accent-color:var(--accent);min-height:32px}
+
+/* ===== builder: preview ===== */
+.pv{display:grid;grid-template-columns:subgrid;grid-column:1 / -1;gap:12px;min-height:0}
+.pvside{display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;padding:2px}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opts button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;min-height:56px;padding:9px 14px;border:0;border-radius:12px;background:var(--bg);text-align:left;cursor:pointer}
+.opts button:hover{background:var(--surface2)}
+.opts button span{font-size:13px;color:var(--muted)}
+.opts button[aria-checked="true"]{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+.pvstage{min-width:0;min-height:0;overflow:auto;border-radius:16px;background:color-mix(in srgb,var(--bg),var(--ink) 4%);padding:28px 24px;display:flex;flex-direction:column;align-items:center}
+.pvcap{align-self:stretch;display:flex;justify-content:space-between;gap:12px;margin:0 0 10px;font-size:13px;color:var(--muted)}
+.pvsize{flex:none;overflow:hidden}
+.pvbox{transform-origin:0 0}
+#pvFrame{display:block;border:0;border-radius:14px;background:var(--bg);box-shadow:0 0 0 1px var(--line),0 24px 50px -24px rgba(16,24,20,.35)}
+.pvbad{max-width:460px;margin:40px auto}
+
+/* ===== builder: overlays ===== */
+#modal{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--scrim);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+#modal .sheet{width:100%;max-width:560px;max-height:92vh;overflow:auto;padding:24px 26px;border-radius:16px;background:var(--surface);color:var(--ink);box-shadow:0 24px 60px -20px rgba(0,0,0,.35)}
+#modal .sheet.wide{max-width:920px}
+.sheet h2{margin:0 0 6px;font-size:19px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.sheet p{margin:0 0 10px}
+.sheet .row.end{justify-content:flex-end;margin-top:18px}
+.tpls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
+.tpl{display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:14px;border:0;border-radius:14px;background:var(--bg);text-align:left;cursor:pointer}
+.tpl:hover{background:var(--surface2)}
+.tpl .thumb{display:grid;place-items:center;height:150px;margin-bottom:8px;padding:8px;border-radius:10px;background:var(--surface);overflow:hidden}
+.tpl .thumb .bplan{margin:0}
+.tpl .thumb .blank{color:var(--faint);font-size:14px}
+.tpl b{font-weight:600}
+.tpl span{font-size:13.5px;color:var(--muted)}
+.keys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 32px;margin-top:14px}
+.keys h3{grid-column:1 / -1;margin:14px 0 4px;font-size:15px}
+.keys h3:first-child{margin-top:0}
+.keys div{display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:30px;font-size:14px;border-bottom:1px solid var(--line)}
+.keys kbd+kbd{margin-left:4px}
+.menu{position:fixed;z-index:22;min-width:240px;padding:6px;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line),0 18px 40px -14px rgba(16,24,20,.35)}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 12px;border:0;border-radius:10px;background:transparent;font-size:14.5px;text-align:left;cursor:pointer}
+.menu button:hover,.menu button:focus-visible{background:var(--surface2);outline:none}
+.menu button .ic{color:var(--muted)}
+.menu .mk{width:18px;flex:none;color:var(--accent);font-weight:600}
+.menu hr{margin:6px 8px;border:0;height:1px;background:var(--line)}
+.menu .mh{padding:8px 12px 4px;font-size:12.5px;color:var(--muted)}
+#toast{position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:30;display:flex;flex-direction:column;gap:6px;align-items:center;width:calc(100% - 24px);max-width:540px;pointer-events:none}
+#toast .msg{margin:0;width:100%;pointer-events:none;box-shadow:var(--shadow),0 4px 16px rgba(0,0,0,.12)}
+#busy{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:500;background:var(--wash);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="mark" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v7M12 16v4"/><circle cx="7.5" cy="9" r="2"/><circle cx="16.5" cy="15" r="2"/></svg></div>
+    <div class="ttl">
+      <div class="nmrow">
+        <input class="nm" id="mName" aria-label="Map name" placeholder="Name this map" maxlength="60" autocomplete="off" spellcheck="false">
+        <input class="cl" id="mClinic" aria-label="Clinic code" placeholder="Clinic" maxlength="20" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="status" id="status" role="status"><i></i><span></span></div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="View">
+      <button type="button" role="tab" id="tabDraw" data-tab="draw" aria-selected="true">Draw</button>
+      <button type="button" role="tab" id="tabPv" data-tab="preview" aria-selected="false" tabindex="-1">Preview<span class="cnt" id="pvCnt" hidden></span></button>
+    </div>
+    <div class="sp"></div>
+    <button type="button" class="ib" id="bUndo" aria-label="Undo" title="Undo (Ctrl+Z)"></button>
+    <button type="button" class="ib" id="bRedo" aria-label="Redo" title="Redo (Ctrl+Y)"></button>
+    <span class="vsep"></span>
+    <button type="button" class="btn ghost mute" id="bFile" aria-haspopup="menu" aria-expanded="false">File</button>
+    <button type="button" class="ib" id="bHelp" aria-label="Shortcuts and help" title="Shortcuts and help (?)"></button>
+    <button type="button" class="btn ghost mute" id="bClose" hidden>Close</button>
+    <button type="button" class="btn primary" id="bSave">Download file</button>
+  </header>
+  <div class="work" id="work">
+    <nav class="rail" id="rail" aria-label="Tools"></nav>
+    <section class="stage" id="stage" aria-label="Drawing">
+      <svg id="cv" tabindex="0" role="application" aria-roledescription="drawing area" aria-label="Bay map drawing" aria-describedby="hint">
+        <defs>
+          <pattern id="gMin" patternUnits="userSpaceOnUse"><path class="gmin"/></pattern>
+          <pattern id="gMaj" patternUnits="userSpaceOnUse"><path class="gmaj"/></pattern>
+        </defs>
+        <rect id="gMinR" width="100%" height="100%" fill="url(#gMin)"/>
+        <rect id="gMajR" width="100%" height="100%" fill="url(#gMaj)"/>
+        <g id="world"><g id="traceL"></g><g id="draw" class="bplan"></g><g id="hud"></g></g>
+      </svg>
+      <p class="hint" id="hint" aria-live="polite"></p>
+      <div class="empty" id="empty" hidden>
+        <div>
+          <h2>Draw your clinic’s treatment rooms</h2>
+          <p>Start with Room: drag a box for each room. Then add the doors and place the bays.</p>
+          <div class="row"><button type="button" class="btn primary" data-act="toolRoom">Draw a room</button><button type="button" class="btn" data-act="templates">Start from a template</button></div>
+          <p class="small muted">Have a floor plan? <button type="button" class="linkbtn" data-act="toolTrace">Trace over a picture of it</button></p>
+        </div>
+      </div>
+      <div class="coach" id="coach" role="dialog" aria-label="Getting started" hidden></div>
+      <div class="zoom" role="group" aria-label="Zoom">
+        <button type="button" class="ib" id="zOut" aria-label="Zoom out" title="Zoom out (−)"></button>
+        <output id="zPct" aria-live="off">100%</output>
+        <button type="button" class="ib" id="zIn" aria-label="Zoom in" title="Zoom in (+)"></button>
+        <button type="button" class="ib" id="zFit" aria-label="Fit the map in view" title="Fit (0)"></button>
+      </div>
+    </section>
+    <aside class="insp" id="insp" aria-label="Details"></aside>
+    <section class="pv" id="pv" hidden>
+      <div class="pvside" id="pvSide"></div>
+      <div class="pvstage" id="pvStage">
+        <p class="pvcap"><span id="pvCap"></span><span id="pvNote"></span></p>
+        <div class="pvsize" id="pvSize"><div class="pvbox" id="pvBox"><iframe id="pvFrame" title="Preview of the bay map in ESK Tracker"></iframe></div></div>
+        <div class="pvbad" id="pvBad" hidden></div>
+      </div>
+    </section>
+  </div>
+</div>
+<div id="modal" hidden></div>
+<div id="menu" class="menu" role="menu" aria-labelledby="bFile" hidden></div>
+<div id="toast"></div>
+<div id="tip" role="tooltip" hidden></div>
+<div id="busy" hidden><span id="busyT"></span></div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<input type="file" id="imgIn" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" hidden>
+<script src="render.js"></script>
+<script src="core.js"></script>
+<script>
+// Bay Map Builder page. The model, geometry, placement and checks live in core.js (BM); the drawing in render.js is the tracker's
+// own, so what a practice lead sees here is what the tracker shows. A bay map holds no patient data: keep it that way.
+'use strict';
+const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = bpEsc, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v)), rnd = n => Math.round(n * 10) / 10;
+const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI, dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const FROM_ESK = new URLSearchParams(location.search).get('from') === 'esk';
+const LS = { draft: 'bmDraft', prefs: 'bmPrefs', coach: 'bmCoach', trace: 'bmTrace' };
+const store = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
+  del(k){ try { localStorage.removeItem(k); } catch {} },
+};
+
+const S = {
+  m: BM.newModel('New bay map'), hist: BM.history(200), ver: 0, drawn: -1, sel: [], vsel: null, tool: 'select', tab: 'draw',
+  view: { k: 1, x: 40, y: 40 }, drag: null, draw: null, hover: null, ghost: null, guides: [], space: false, pinch: null,
+  prefs: { snap: true, grid: true, theme: '', ...(store.get(LS.prefs) || {}) }, ferr: {},
+  issues: [], host: null, hostBays: [], savedSig: null, dirty: false, saving: false, clip: null, pasteN: 0,
+  trace: null, traceVer: 0, traced: -1, scale: null, coach: -1, pv: { w: 'wide', theme: '' }, saved: 'ok',
+};
+
+// ---------- icons ----------
+const IC = {
+  select: '<path d="M6 3.5l12 7.2-5.3 1.4-2.6 5.4z"/>',
+  hand: '<path d="M8.5 12.5V6a1.5 1.5 0 0 1 3 0v5M11.5 11V4.5a1.5 1.5 0 0 1 3 0V11M14.5 11V6a1.5 1.5 0 0 1 3 0v7.5a6.5 6.5 0 0 1-6.5 6.5h-.6a6 6 0 0 1-4.9-2.6l-1.7-2.8a1.6 1.6 0 0 1 2.6-1.8l2.1 2.4"/>',
+  room: '<rect x="4" y="5" width="16" height="14" rx="1" stroke-width="2.4"/>',
+  wall: '<path d="M4 19V9h8V4h8" stroke-width="2.6"/>',
+  door: '<path d="M2.5 20h4.5M17 20h4.5" stroke-width="2.6"/><path d="M7 20V8a12 12 0 0 1 12 12"/>',
+  window: '<path d="M2.5 12h4M17.5 12h4" stroke-width="2.6"/><rect x="6.5" y="9.5" width="11" height="5"/><path d="M6.5 12h11"/>',
+  curtain: '<path d="M4 20c1-6 4-11 9-13s6-3 7-3" stroke-width="2.6" stroke-dasharray=".1 3.4"/><path d="M4 20c1-6 4-11 9-13s6-3 7-3" opacity=".35"/>',
+  bay: '<circle cx="12" cy="12" r="9" stroke-dasharray="2.6 2.4"/><rect x="9" y="7" width="6" height="9" rx="1.8"/><path d="M9 9.5h6"/>',
+  chair: '<rect x="6" y="4" width="12" height="16" rx="3"/><path d="M6 9h12M8.5 11.5v6M15.5 11.5v6"/>',
+  table: '<circle cx="12" cy="12" r="7"/>',
+  counter: '<rect x="3" y="8.5" width="18" height="7" rx="1"/>',
+  desk: '<rect x="3.5" y="5" width="17" height="9" rx="1"/><path d="M9 18h6M12 14v4"/>',
+  sink: '<rect x="4" y="6" width="16" height="12" rx="4"/><circle cx="12" cy="12" r="1.6"/>',
+  cabinet: '<rect x="5" y="4" width="14" height="16" rx="1"/><path d="M12 4v16M10 12h.01M14 12h.01"/>',
+  label: '<path d="M5 7V5h14v2M12 5v14M9 19h6"/>',
+  trace: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 16l5-5 4 4 2.5-2.5 5.5 5.5"/><circle cx="15.5" cy="9.5" r="1.5"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.7.3-1 .9-1 1.6v.4M12 17h.01"/>',
+  chev: '<path d="m7 10 5 5 5-5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>',
+  fit: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  rotL: '<path d="M4 4v5h5"/><path d="M4.7 9a8 8 0 1 1 1.4 7.6"/>', rotR: '<path d="M20 4v5h-5"/><path d="M19.3 9a8 8 0 1 0-1.4 7.6"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  error: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>',
+  warn: '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17h.01"/>',
+  tip: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  dup: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  open: '<path d="M4 19V6a1 1 0 0 1 1-1h4l2 2h8a1 1 0 0 1 1 1v3"/><path d="M4 19l2.6-7h15l-2.6 7z"/>',
+  down: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  grid: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/>',
+  restart: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/>',
+};
+const icon = (n, c = '') => `<svg class="ic${c ? ' ' + c : ''}" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
+
+// ---------- tools ----------
+const TOOLS = [
+  { id: 'select', key: 'V', name: 'Select', hint: 'Click something to change it. Drag to move it. Drag across empty space, or Shift-click, to pick several.' },
+  { id: 'hand', key: 'Space', name: 'Move view', hint: 'Drag to move the view. Hold Space with any tool to do the same. Scroll to zoom.' },
+  '-',
+  { id: 'room', key: 'R', name: 'Room', hint: 'Drag a box for the room. Its walls and its name are added for you.' },
+  { id: 'wall', key: 'W', name: 'Wall', hint: 'Click where the wall starts.' },
+  { id: 'door', key: 'D', name: 'Door', hint: 'Point at a wall and click to add a door. Press F to swing it the other way.' },
+  { id: 'window', key: 'N', name: 'Window', hint: 'Point at a wall and click to add a window.' },
+  { id: 'curtain', key: 'C', name: 'Curtain', hint: 'Click where the curtain track starts. It screens the bays it runs past.' },
+  '-',
+  { id: 'bay', key: 'B', name: 'Bay', hint: 'Click where a recliner goes. The rug, chair, side table, lantern and label come with it, numbered for you.' },
+  { id: 'chair', key: 'H', name: 'Chair', hint: 'Click to add a spare recliner that isn’t a bay.' },
+  { id: 'table', key: 'T', name: 'Side table', hint: 'Click to add a side table. Bays already have their own.' },
+  { id: 'counter', key: 'K', name: 'Counter', hint: 'Click near a wall to add a counter. It lines up with the wall.' },
+  { id: 'desk', key: 'E', name: 'Desk', hint: 'Click to add a desk. Near a wall, it lines up with it.' },
+  { id: 'sink', key: 'S', name: 'Sink', hint: 'Click near a wall to add a sink.' },
+  { id: 'cabinet', key: 'Q', name: 'Cabinet', hint: 'Click near a wall to add a cabinet.' },
+  { id: 'label', key: 'L', name: 'Label', hint: 'Click to add a room name or a note, then type it on the right.' },
+  '-',
+  { id: 'trace', key: 'I', name: 'Trace image', hint: 'Open a picture of your floor plan to draw over. Drag it to move it; drag its corner to resize it.' },
+];
+const TOOL = Object.fromEntries(TOOLS.filter(t => t !== '-').map(t => [t.id, t]));
+const POINT = { bay: 1, chair: 1, table: 1, counter: 1, desk: 1, sink: 1, cabinet: 1, label: 1 };
+const LINE_HINT = {
+  wall: 'Click to add corners. <b>Double-click</b> or <b>Enter</b> to finish; click the first corner to close the room. <b>Esc</b> takes back the last corner. Hold <b>Shift</b> for any angle.',
+  curtain: 'Click along the track. <b>Double-click</b> or <b>Enter</b> to finish. <b>Esc</b> takes back the last point. Drag its middle handle later to curve it.',
+};
+
+// Tool buttons with their shortcut, built once.
+function buildRail(){
+  $('#rail').innerHTML = TOOLS.map(t => t === '-' ? '<hr>' : `<button type="button" class="tool" data-tool="${t.id}" aria-pressed="false"${t.key.length === 1 ? ` aria-keyshortcuts="${t.key}"` : ` title="Or hold ${t.key} with any tool"`}>${icon(t.id)}<span>${esc(t.name)}</span>${t.key.length === 1 ? `<kbd>${t.key}</kbd>` : ''}</button>`).join('');
+}
+// Switch tool. A wall or curtain in progress is finished first, so nothing drawn is lost.
+function setTool(id){
+  if (S.draw && S.draw.k !== id) finishLine(false);
+  S.tool = id; S.ghost = null; S.guides = []; S.scale = null; S.hover = null; hideTip();
+  if (id !== 'select') S.vsel = null;
+  $$('.tool').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === id)));
+  updHint(); updCursor(); renderInsp(); paint();
+}
+
+// ---------- model changes ----------
+const sel1 = () => S.sel.length === 1 ? BM.byId(S.m, S.sel[0]) : null;
+const sig = m => { try { const P = BM.exportPlan(m, { savedAt: '' }); return JSON.stringify({ ...P, savedAt: '', savedBy: '' }); } catch { return ''; } };
+// Something changed but isn't finished (a drag, typing): redraw only.
+function touch(){ S.ver++; paint(); }
+// A finished change: one undo step, autosave, recheck, redraw.
+function commit(){
+  S.ver++;
+  if (S.hist.push(S.m)){ autosave(); scheduleCheck(); }
+  updUndo(); syncTop(); renderInsp(); paint();
+}
+// Replace the whole model (undo, template, file). reset = a fresh start with no undo history.
+function setModel(m, reset = false){
+  S.m = m; S.ver++; S.draw = null; S.drag = null; S.vsel = null; S.ghost = null;
+  S.sel = S.sel.filter(id => BM.byId(m, id));
+  if (reset) S.hist.reset(m); else S.hist.push(m);
+  autosave(); scheduleCheck(); updUndo(); syncTop(); renderInsp(); paint();
+}
+function undo(){ const m = S.hist.undo(); if (m){ S.lastSel = S.sel; S.m = m; afterHist(); } }
+function redo(){ const m = S.hist.redo(); if (m){ S.lastSel = S.sel.length ? S.sel : S.lastSel; S.m = m; afterHist(); } }
+// After undo or redo, keep what was selected (or bring back what a redo restores).
+function afterHist(){ S.ver++; S.draw = null; S.vsel = null; const keep = S.sel.filter(id => BM.byId(S.m, id)); S.sel = keep.length ? keep : (S.lastSel || []).filter(id => BM.byId(S.m, id)); autosave(); scheduleCheck(); updUndo(); syncTop(); renderInsp(); paint(); }
+function updUndo(){ $('#bUndo').disabled = !S.hist.canUndo(); $('#bRedo').disabled = !S.hist.canRedo(); }
+function syncTop(){
+  const n = $('#mName'), c = $('#mClinic');
+  if (document.activeElement !== n) n.value = S.m.name || '';
+  if (document.activeElement !== c) c.value = S.m.clinic || '';
+}
+
+// ---------- autosave ----------
+// The draft lives in this browser only (bmDraft), so closing the page loses nothing.
+function autosave(){
+  clearTimeout(S.asT); S.saved = 'pend'; updStatus();
+  S.asT = setTimeout(() => { S.saved = store.set(LS.draft, { v: 1, at: new Date().toISOString(), model: S.m }) ? 'ok' : 'fail'; updStatus(); }, 400);
+}
+function updStatus(){
+  const el = $('#status'), t = $('#status span');
+  el.className = 'status' + (S.saved === 'fail' ? ' fail' : S.dirty ? ' dirty' : '');
+  t.textContent = S.saved === 'fail' ? 'Couldn’t save on this computer. Download the file to keep it.'
+    : S.saving ? 'Saving to the tracker…' : S.dirty ? 'Not in the tracker yet' : S.host ? (S.hostBuiltIn ? 'The tracker has its built-in map' : 'Saved in the tracker') : 'Saved on this computer';
+  el.title = S.saved === 'fail' ? '' : S.host ? 'Your work is also kept on this computer until you save it to the tracker.' : 'Kept in this browser. Download the file to use it in the tracker.';
+}
+
+// ---------- checks ----------
+function scheduleCheck(){ clearTimeout(S.ckT); S.ckT = setTimeout(runCheck, 160); }
+// The checklist: core.check() plus, when the tracker opened us, bays that today's visits use but this map lacks.
+function runCheck(){
+  let L;
+  try { L = BM.check(S.m); } catch (e){ console.error(e); L = [{ level: 'error', msg: 'Something on the map can’t be checked. Undo the last change, or delete what you just added.', ids: [] }]; }
+  if (S.hostBays.length && S.m.items.some(i => i.k === 'bay')){
+    const have = new Set(S.m.items.filter(i => i.k === 'bay').map(b => String(b.no ?? '').trim().toLowerCase()));
+    const miss = S.hostBays.filter(b => !have.has(String(b).toLowerCase()));
+    if (miss.length) L.push({ level: 'warn', msg: `Today’s visits use ${miss.length > 1 ? 'bays' : 'Bay'} ${miss.join(', ')}, which ${miss.length > 1 ? 'aren’t' : 'isn’t'} on this map. Those visits show under the map until their bay is changed.`, ids: [] });
+  }
+  S.issues = S.m.items.length ? L : [];
+  L = S.issues;
+  if (S.host) S.dirty = sig(S.m) !== S.savedSig;
+  const bad = L.filter(x => x.level === 'error').length, warn = L.filter(x => x.level === 'warn').length, c = $('#pvCnt');
+  c.hidden = !(bad || warn); c.textContent = bad || warn; c.className = 'cnt' + (bad ? ' bad' : '');
+  c.setAttribute('aria-label', bad ? `${bad} to fix` : `${warn} to look at`);
+  updStatus(); renderInsp();
+  if (S.tab === 'preview') renderPreview();
+}
+
+// ---------- view ----------
+const cv = $('#cv'), stage = $('#stage'), insp = $('#insp');
+function toWorld(e){ const r = cv.getBoundingClientRect(); return [(e.clientX - r.left - S.view.x) / S.view.k, (e.clientY - r.top - S.view.y) / S.view.k]; }
+function zoomAt(f, sx, sy){
+  const v = S.view, k = clamp(v.k * f, 0.08, 8), q = k / v.k;
+  S.view = { k, x: sx - (sx - v.x) * q, y: sy - (sy - v.y) * q }; updZoom(); paint();
+}
+function zoomBy(f){ const r = cv.getBoundingClientRect(); zoomAt(f, r.width / 2, r.height / 2); }
+function updZoom(){ $('#zPct').textContent = Math.round(S.view.k * 100) + '%'; }
+// What's drawn (and the trace picture), in drawing units.
+function contentBox(){
+  let b = null;
+  if (S.m.items.length){ const L = BM.layout(S.m).box; b = { x0: L.x, y0: L.y, x1: L.x + L.w, y1: L.y + L.h }; }
+  const T = S.trace; if (T){ const t = { x0: T.x, y0: T.y, x1: T.x + T.w, y1: T.y + T.h }; b = b ? { x0: Math.min(b.x0, t.x0), y0: Math.min(b.y0, t.y0), x1: Math.max(b.x1, t.x1), y1: Math.max(b.y1, t.y1) } : t; }
+  return b;
+}
+// Fit a box (default: everything) in the view, never zooming in past 200%.
+function fit(b = contentBox(), max = 2){
+  const r = cv.getBoundingClientRect(); if (!r.width) return;
+  if (!b){ S.view = { k: 1, x: 40, y: 40 }; updZoom(); paint(); return; }
+  const w = Math.max(b.x1 - b.x0, 40), h = Math.max(b.y1 - b.y0, 40), pad = 36;
+  const k = clamp(Math.min((r.width - 2 * pad) / w, (r.height - 2 * pad - 30) / h), 0.08, max);
+  S.view = { k, x: r.width / 2 - (b.x0 + w / 2) * k, y: r.height / 2 + 15 - (b.y0 + h / 2) * k }; updZoom(); paint();
+}
+// Bring items into view (from the checklist) without changing the zoom unless they don't fit.
+function reveal(ids){
+  let b = null; const L = BM.layout(S.m);
+  for (const id of ids){ const it = BM.byId(S.m, id); if (!it) continue; const x = BM.itemBox(S.m, it, L);
+    b = b ? { x0: Math.min(b.x0, x.x0), y0: Math.min(b.y0, x.y0), x1: Math.max(b.x1, x.x1), y1: Math.max(b.y1, x.y1) } : { ...x }; }
+  if (!b) return;
+  const r = cv.getBoundingClientRect(), k = S.view.k, s = [b.x0 * k + S.view.x, b.y0 * k + S.view.y, b.x1 * k + S.view.x, b.y1 * k + S.view.y];
+  if (s[0] > 40 && s[1] > 60 && s[2] < r.width - 40 && s[3] < r.height - 60) return;
+  if ((b.x1 - b.x0) * k > r.width - 120 || (b.y1 - b.y0) * k > r.height - 160) return fit(b, k);
+  S.view = { k, x: r.width / 2 - (b.x0 + b.x1) / 2 * k, y: r.height / 2 - (b.y0 + b.y1) / 2 * k }; paint();
+}
+const center = () => { const r = cv.getBoundingClientRect(); return [(r.width / 2 - S.view.x) / S.view.k, (r.height / 2 - S.view.y) / S.view.k]; };
+
+// ---------- drawing ----------
+let raf = 0;
+const paint = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; drawAll(); }); };
+function drawAll(){
+  const { k, x, y } = S.view;
+  $('#world').setAttribute('transform', `translate(${x} ${y}) scale(${k})`);
+  drawGrid();
+  if (S.drawn !== S.ver){ S.drawn = S.ver; try { drawModel(); } catch (e){ console.error(e); } }
+  if (S.traced !== S.traceVer){ S.traced = S.traceVer; drawTrace(); }
+  try { $('#hud').innerHTML = hudHTML(); } catch (e){ console.error(e); }
+  $('#empty').hidden = !!(S.m.items.length || S.trace || S.draw || S.drag || S.tool === 'trace');
+}
+// Grid: minor lines every grid step (6 in), major every 4 ft; drawn in screen pixels so lines stay crisp at any zoom.
+function drawGrid(){
+  const { k, x, y } = S.view, g = (S.m.grid || BM.GRID) * k, G = BM.UNIT * 4 * k;
+  for (const [id, s] of [['gMin', g], ['gMaj', G]]){
+    const p = $('#' + id); p.setAttribute('width', s); p.setAttribute('height', s); p.setAttribute('patternTransform', `translate(${x} ${y})`);
+    p.firstElementChild.setAttribute('d', `M${s} .5H.5V${s}`);
+  }
+  $('#gMinR').style.display = S.prefs.grid && g >= 7 ? '' : 'none';
+  $('#gMajR').style.display = S.prefs.grid && G >= 10 ? '' : 'none';
+}
+// The map itself, drawn by the tracker's renderer from the plan, with rugs, room names and tags added in SVG.
+function drawModel(){
+  const L = BM.layout(S.m), P = BM.planOf(S.m, L), [tw, th] = L.tag, bays = S.m.items.filter(i => i.k === 'bay');
+  const rugs = bays.map(b => `<circle class="rug" cx="${b.x}" cy="${b.y}" r="${b.r}"/>`).join('');
+  const rooms = S.m.items.filter(i => i.k === 'label' && String(i.t || '').trim()).map(l => `<text class="rlab${l.small ? ' small' : ''}" x="${l.x}" y="${l.y}">${esc(String(l.t).trim())}</text>`).join('');
+  const tags = bays.map(b => { const t = L.bays.get(b.id)?.tag; if (!t) return '';
+    const no = String(b.no ?? '').trim() || '?', px = -tw / 2 + th * 0.3;
+    return `<g class="etag" transform="translate(${t[0]} ${t[1]})"><rect x="${-tw / 2}" y="${-th / 2}" width="${tw}" height="${th}" rx="${th * 0.24}"/><text x="${px}" y="${-th * 0.13}" font-size="${th * 0.3}" dominant-baseline="central">${esc(no)}<tspan dx="${th * 0.15}" font-weight="500">Open</tspan></text><text class="s" x="${px}" y="${th * 0.22}" font-size="${th * 0.24}" dominant-baseline="central">Nobody booked</text></g>`; }).join('');
+  $('#draw').innerHTML = `${bpUnder(P, () => true)}${rugs}${rooms}${bpOver(P, P.bays, () => false)}${tags}`;
+}
+function drawTrace(){
+  const T = S.trace;
+  $('#traceL').innerHTML = T ? `<image href="${T.src}" x="${T.x}" y="${T.y}" width="${T.w}" height="${T.h}" preserveAspectRatio="none" opacity="${T.op}"/>` : '';
+}
+const ptsD = pts => pts.length ? 'M' + pts.map(p => `${rnd(p[0])} ${rnd(p[1])}`).join('L') : '';
+// Outline of one item for hover and selection.
+function olHTML(it, cls){
+  const m = S.m, u = 1 / S.view.k, pad = 3 * u;
+  if (it.k === 'wall' || it.k === 'curtain') return `<path class="ol ${cls}" d="${ptsD(BM.polyOf(it))}"/>`;
+  if (it.k === 'door' || it.k === 'window') return `<path class="ol ${cls}" d="${(it.k === 'door' && BM.doorD(m, it)) || ''}${BM.windowD(m, it)}"/>`;
+  if (it.k === 'path') return `<path class="ol ${cls}" d="${esc(it.d)}"/>`;
+  if (it.k === 'bay'){ const L = BM.layout(m), t = L.bays.get(it.id)?.tag, [tw, th] = L.tag;
+    return `<circle class="ol ${cls}" cx="${it.x}" cy="${it.y}" r="${it.r + pad}"/>${t && cls === 'sel' ? `<rect class="ol tagol" x="${t[0] - tw / 2 - pad}" y="${t[1] - th / 2 - pad}" width="${tw + 2 * pad}" height="${th + 2 * pad}" rx="${th * 0.24}"/>` : ''}`; }
+  if (it.k === 'label'){ const b = BM.itemBox(m, it); return `<rect class="ol ${cls}" x="${b.x0 - pad}" y="${b.y0 - pad}" width="${b.x1 - b.x0 + 2 * pad}" height="${b.y1 - b.y0 + 2 * pad}" rx="${4 * u}"/>`; }
+  if (it.k === 'table' && it.shape !== 'square') return `<circle class="ol ${cls}" cx="${it.x}" cy="${it.y}" r="${it.s / 2 + pad}"/>`;
+  const [w, h] = sizeOf(it);
+  return `<rect class="ol ${cls}" x="${-w / 2 - pad}" y="${-h / 2 - pad}" width="${w + 2 * pad}" height="${h + 2 * pad}" rx="${3 * u}" transform="translate(${it.x} ${it.y}) rotate(${it.a || 0})"/>`;
+}
+const sizeOf = it => it.k === 'chair' ? [52, 60] : it.k === 'table' ? [it.s, it.s] : [it.w, it.h];
+// Drag handles for the one selected item: corners and bend handles on lines, turn and size handles on things.
+function handlesHTML(it){
+  const u = 1 / S.view.k, hit = (cls, h, x, y, extra = '') => `<circle class="hit ${cls}" data-h="${h}" data-id="${esc(it.id)}"${extra} cx="${x}" cy="${y}" r="${11 * u}"/>`;
+  let s = '';
+  if (it.k === 'wall' || it.k === 'curtain'){
+    const busy = new Set(S.m.items.filter(o => (o.k === 'door' || o.k === 'window') && o.wall === it.id).map(o => o.seg));
+    for (const g of BM.segsOf(it)){ if (busy.has(g.i) || g.len < 24 * u) continue; const q = BM.segMid(g.a, g.b, g.s);
+      s += `<circle class="hb" cx="${q[0]}" cy="${q[1]}" r="${4.5 * u}"/>${hit('b', 'b', q[0], q[1], ` data-i="${g.i}"`)}`; }
+    it.pts.forEach((p, i) => { s += `<circle class="hv${S.vsel && S.vsel.id === it.id && S.vsel.i === i ? ' on' : ''}" cx="${p[0]}" cy="${p[1]}" r="${5.5 * u}"/>${hit('v', 'v', p[0], p[1], ` data-i="${i}"`)}`; });
+    if (it.k === 'curtain'){ const e = it.rev ? it.pts[it.pts.length - 1] : it.pts[0]; s += `<rect class="bunch" x="${e[0] - 4 * u}" y="${e[1] - 4 * u}" width="${8 * u}" height="${8 * u}" transform="rotate(45 ${e[0]} ${e[1]})"/>`; }
+    return s;
+  }
+  if (it.x == null || it.k === 'label') return '';
+  const c = [it.x, it.y], a = it.a || 0, front = it.k === 'bay' || it.k === 'chair';
+  if (it.k !== 'table' || it.shape === 'square'){
+    const reach = it.k === 'bay' ? it.r : it.k === 'chair' ? 30 : sizeOf(it)[1] / 2, dir = front ? [-Math.sin(rad(a)), Math.cos(rad(a))] : [Math.sin(rad(a)), -Math.cos(rad(a))];
+    const e = [c[0] + dir[0] * reach, c[1] + dir[1] * reach], q = [c[0] + dir[0] * (reach + 22 * u), c[1] + dir[1] * (reach + 22 * u)];
+    s += `<path class="stem" d="M${e}L${q}"/><circle class="hr" cx="${q[0]}" cy="${q[1]}" r="${6 * u}"/>${hit('r', 'rot', q[0], q[1])}`;
+  }
+  if (it.k === 'chair') return s;
+  let z;
+  if (it.k === 'bay') z = [it.x + it.r * Math.SQRT1_2, it.y + it.r * Math.SQRT1_2];
+  else if (it.k === 'table' && it.shape !== 'square') z = [it.x + it.s / 2, it.y];
+  else { const [w, h] = sizeOf(it), t = rad(a); z = [c[0] + w / 2 * Math.cos(t) - h / 2 * Math.sin(t), c[1] + w / 2 * Math.sin(t) + h / 2 * Math.cos(t)]; }
+  return s + `<rect class="hs" x="${z[0] - 5 * u}" y="${z[1] - 5 * u}" width="${10 * u}" height="${10 * u}" rx="${2 * u}"/>${hit('s', 'size', z[0], z[1])}`;
+}
+// Snap guides from core.snap().
+function guidesHTML(){
+  const u = 1 / S.view.k;
+  return S.guides.map(g => g.k === 'point' ? `<circle class="gpt" cx="${g.p[0]}" cy="${g.p[1]}" r="${8 * u}"/>`
+    : g.k === 'line' ? `<path class="gline" d="M${g.a}L${g.b}"/>`
+    : g.k === 'angle' ? (g.deg % 45 ? '' : (() => { const r = rad(g.deg), L = 3000; return `<path class="guide" d="M${g.from[0] - Math.cos(r) * L} ${g.from[1] - Math.sin(r) * L}L${g.from[0] + Math.cos(r) * L} ${g.from[1] + Math.sin(r) * L}"/>`; })())
+    : `<path class="guide" d="M${g.a}L${g.b}"/>`).join('');
+}
+// A length label beside a line, in feet and inches.
+function dimHTML(a, b, off = 18){
+  const u = 1 / S.view.k, L = dist(a, b); if (L < 2) return '';
+  const nx = -(b[1] - a[1]) / L, ny = (b[0] - a[0]) / L;
+  return `<text class="dim" x="${(a[0] + b[0]) / 2 + nx * off * u}" y="${(a[1] + b[1]) / 2 + ny * off * u}" font-size="${12.5 * u}">${esc(BM.fmtFt(L))}</text>`;
+}
+// What a click with the current tool would add, drawn faintly under the pointer.
+function ghostHTML(){
+  const G = S.ghost; if (!G) return '';
+  if (G.door){ const it = G.door, gap = BM.windowD(S.m, it); return `<g class="ghost"><path class="gap" d="${gap}"/>${it.k === 'window' ? `<path class="gwin" d="${gap}"/>` : `<path class="dsym" d="${BM.doorD(S.m, it)}"/>`}</g>`; }
+  const it = G.it; if (!it) return '';
+  if (it.k === 'bay'){ const x = G.parts, [tw, th] = BM.layout(S.m).tag;
+    return `<g class="ghost bplan"><circle class="rug" cx="${it.x}" cy="${it.y}" r="${it.r}"/>${x ? `${x.table ? `<g class="table">${bpTable(x.table)}</g>` : ''}${bpChair(x.chair[0], x.chair[1], x.chair[2])}${x.tag ? `<rect class="gtag" x="${x.tag[0] - tw / 2}" y="${x.tag[1] - th / 2}" width="${tw}" height="${th}" rx="${th * 0.24}"/>` : ''}` : ''}</g>`; }
+  if (it.k === 'chair') return `<g class="ghost bplan">${bpChair(it.x, it.y, it.a)}</g>`;
+  if (it.k === 'label') return `<g class="ghost"><text class="glab" x="${it.x}" y="${it.y}">${esc(it.t)}</text></g>`;
+  if (it.k === 'table' && it.shape !== 'square') return `<g class="ghost"><circle class="gfurn" cx="${it.x}" cy="${it.y}" r="${it.s / 2}"/></g>`;
+  const [w, h] = sizeOf(it);
+  return `<g class="ghost"><rect class="gfurn" x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="3" transform="translate(${it.x} ${it.y}) rotate(${it.a || 0})"/></g>`;
+}
+function hudHTML(){
+  const u = 1 / S.view.k, d = S.drag; let s = '';
+  if (S.tool === 'trace' && S.trace){ const T = S.trace;
+    s += `<rect class="tframe" x="${T.x}" y="${T.y}" width="${T.w}" height="${T.h}"/>`;
+    if (!T.lock) s += `<rect class="hs" x="${T.x + T.w - 6 * u}" y="${T.y + T.h - 6 * u}" width="${12 * u}" height="${12 * u}" rx="${2 * u}"/><circle class="hit s" data-h="tsize" cx="${T.x + T.w}" cy="${T.y + T.h}" r="${12 * u}"/>`; }
+  if (S.hover && !S.sel.includes(S.hover) && !d){ const it = BM.byId(S.m, S.hover); if (it) s += olHTML(it, 'hov'); }
+  const moving = d && d.moved && (d.k === 'move' || d.k === 'slide');
+  for (const id of S.sel){ const it = BM.byId(S.m, id); if (it) s += olHTML(it, 'sel'); }
+  const one = sel1();
+  if (one && S.tool === 'select' && !moving) s += handlesHTML(one);
+  s += guidesHTML();
+  if (S.draw && S.draw.pts.length){ const D = S.draw, pts = D.cur ? [...D.pts, D.cur] : D.pts;
+    s += `<path class="${D.k === 'wall' ? 'dwall' : 'dcurt'}" d="${ptsD(pts)}"/><path class="draft" d="${ptsD(pts)}"/>`;
+    s += D.pts.map((p, i) => `<circle class="dpt${i === 0 && D.k === 'wall' && D.pts.length >= 3 ? ' first' : ''}" cx="${p[0]}" cy="${p[1]}" r="${(i === 0 && D.pts.length >= 3 ? 6 : 4) * u}"/>`).join('');
+    if (D.cur) s += dimHTML(D.pts[D.pts.length - 1], D.cur); }
+  if (d && d.k === 'room' && d.moved){ const [a, b] = [d.p0, d.p1], x0 = Math.min(a[0], b[0]), y0 = Math.min(a[1], b[1]), x1 = Math.max(a[0], b[0]), y1 = Math.max(a[1], b[1]);
+    s += `<path class="dwall" d="M${x0} ${y0}H${x1}V${y1}H${x0}Z"/><path class="draft" d="M${x0} ${y0}H${x1}V${y1}H${x0}Z"/>${dimHTML([x0, y0], [x1, y0], -18)}${dimHTML([x0, y1], [x0, y0], -18)}`; }
+  if (d && d.k === 'vert' && d.moved){ const w = BM.byId(S.m, d.id); if (w){ const n = w.pts.length, p = w.pts[d.i], nb = [w.pts[d.i - 1] || (w.closed ? w.pts[n - 1] : null), w.pts[d.i + 1] || (w.closed ? w.pts[0] : null)];
+    for (const q of nb) if (q) s += dimHTML(q, p); } }
+  if (d && d.k === 'box' && d.moved){ const x0 = Math.min(d.p0[0], d.p1[0]), y0 = Math.min(d.p0[1], d.p1[1]); s += `<rect class="mq" x="${x0}" y="${y0}" width="${Math.abs(d.p1[0] - d.p0[0])}" height="${Math.abs(d.p1[1] - d.p0[1])}"/>`; }
+  if (!d) s += ghostHTML();
+  if (S.scale){ const P = S.scale.pts, q = S.scale.cur; if (P.length) s += `<path class="scl" d="${ptsD(q && P.length === 1 ? [P[0], q] : P)}"/>`;
+    s += P.map(p => `<circle class="sclp" cx="${p[0]}" cy="${p[1]}" r="${4 * u}"/>`).join(''); }
+  return s;
+}
+
+// ---------- hints, cursor, tooltip ----------
+function updHint(){
+  const it = sel1(), t = TOOL[S.tool];
+  let h = t.hint;
+  if (S.scale) h = S.scale.pts.length ? 'Now click the other end.' : 'Click one end of something you know the length of, like a wall or a doorway.';
+  else if (S.draw && S.draw.pts.length) h = LINE_HINT[S.draw.k];
+  else if (S.tool === 'select' && it) h = {
+    wall: 'Drag a corner to move it. Drag a small round handle to curve that side; double-click it to straighten. Double-click a side to add a corner.',
+    curtain: 'Drag a point to move it, or the round handle to curve the track. The diamond shows where it bunches when open.',
+    bay: 'Drag to move. Drag the dot in front to turn the chair, the square to resize the rug, or the label to place it yourself.',
+    door: 'Drag along the wall to move it. Press F to swing it the other way.', window: 'Drag along the wall to move it.',
+    chair: 'Drag to move. Drag the dot in front to turn it.', label: 'Drag to move. Type the name on the right.',
+  }[it.k] || 'Drag to move. Drag the dot to turn it, or the square to resize it.';
+  $('#hint').innerHTML = h;
+}
+function updCursor(){
+  const d = S.drag;
+  stage.dataset.cur = d && d.k === 'pan' ? 'grabbing' : S.space || S.tool === 'hand' ? 'grab' : S.ghost && S.ghost.err ? 'no'
+    : S.tool === 'select' ? (S.hover || (d && d.moved && d.k !== 'box') ? 'move' : '') : S.tool === 'trace' ? (S.scale ? 'draw' : 'move') : 'draw';
+}
+function showTip(e, html){ const t = $('#tip'); t.innerHTML = html; t.hidden = false; t.style.left = (e.clientX + 16) + 'px'; t.style.top = (e.clientY + 18) + 'px'; }
+function hideTip(){ $('#tip').hidden = true; }
+
+// ---------- snapping ----------
+const snapOn = e => S.prefs.snap && !(e && e.altKey);
+// A point for placing things: grid (and other corners), unless Alt is held or snapping is off.
+function snapP(p, e){
+  if (!snapOn(e)){ S.guides = []; return [rnd(p[0]), rnd(p[1])]; }
+  const r = BM.snap(S.m, p, { grid: true, walls: false }); S.guides = r.guides; return r.p;
+}
+// A point for drawing walls and curtains: corners, 15° steps from the last point (Shift = any angle), walls, grid.
+function drawSnap(p, e){
+  const D = S.draw, last = D && D.pts[D.pts.length - 1];
+  if (!snapOn(e)){ S.guides = []; return [rnd(p[0]), rnd(p[1])]; }
+  const r = BM.snap(S.m, p, { grid: true, from: last, angle: !e.shiftKey, extra: D ? D.pts : [], tol: Math.max(10, 9 / S.view.k) });
+  S.guides = r.guides; return r.p;
+}
+const tagAt = p => { const L = BM.layout(S.m), [tw, th] = L.tag;
+  for (let i = S.m.items.length - 1; i >= 0; i--){ const b = S.m.items[i]; if (b.k !== 'bay') continue; const t = L.bays.get(b.id)?.tag;
+    if (t && Math.abs(p[0] - t[0]) <= tw / 2 && Math.abs(p[1] - t[1]) <= th / 2) return b.id; }
+  return null; };
+const hitAt = p => tagAt(p) || BM.hit(S.m, p, 7 / S.view.k);
+
+// ---------- pointer ----------
+const ptrs = new Map();
+function start(e, d){ d.cx = e.clientX; d.cy = e.clientY; d.moved = false; S.drag = d; updCursor(); }
+function onDown(e){
+  if (e.button === 2) return;
+  if (document.activeElement !== cv) cv.focus({ preventScroll: true });
+  ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  try { cv.setPointerCapture(e.pointerId); } catch {}
+  if (ptrs.size === 2) return startPinch();
+  if (ptrs.size > 2) return;
+  hideTip();
+  const p = toWorld(e);
+  if (e.button === 1 || S.space || S.tool === 'hand'){ e.preventDefault(); return start(e, { k: 'pan', vx: S.view.x, vy: S.view.y }); }
+  if (S.scale) return scaleClick(p);
+  const h = e.target.closest && e.target.closest('[data-h]');
+  if (h) return handleDown(e, h.dataset, p);
+  if (S.tool === 'select') return selectDown(e, p);
+  if (S.tool === 'room'){ const q = snapP(p, e); return start(e, { k: 'room', p0: q, p1: q }); }
+  if (S.tool === 'wall' || S.tool === 'curtain') return lineClick(e, p);
+  if (S.tool === 'door' || S.tool === 'window') return placeDoor(e, p);
+  if (S.tool === 'trace') return traceDown(e, p);
+  if (POINT[S.tool]) return placeItem(S.tool, snapP(p, e));
+}
+function selectDown(e, p){
+  const tid = tagAt(p);
+  S.vsel = null;
+  if (tid){ if (e.shiftKey) return toggleSel(tid);
+    if (!S.sel.includes(tid) || S.sel.length > 1){ S.sel = [tid]; renderInsp(); }
+    const L = BM.layout(S.m), t = L.bays.get(tid).tag; updHint();
+    return start(e, { k: 'tag', id: tid, base: JSON.stringify(S.m), off: [t[0] - p[0], t[1] - p[1]] }); }
+  const id = BM.hit(S.m, p, 7 / S.view.k);
+  if (id){
+    if (e.shiftKey) return toggleSel(id);
+    const was = S.sel.includes(id); if (!was){ S.sel = [id]; renderInsp(); updHint(); paint(); }
+    const it = BM.byId(S.m, id);
+    if (S.sel.length === 1 && (it.k === 'door' || it.k === 'window')) return start(e, { k: 'slide', id, base: JSON.stringify(S.m) });
+    return start(e, { k: 'move', ids: S.sel.slice(), base: JSON.stringify(S.m), p0: p, hit: id, was });
+  }
+  start(e, { k: 'box', p0: p, p1: p, add: e.shiftKey ? S.sel.slice() : [] });
+  if (!e.shiftKey && S.sel.length){ S.sel = []; renderInsp(); updHint(); paint(); }
+}
+function toggleSel(id){ S.sel = S.sel.includes(id) ? S.sel.filter(x => x !== id) : [...S.sel, id]; renderInsp(); updHint(); paint(); }
+function handleDown(e, h, p){
+  const base = JSON.stringify(S.m);
+  if (h.h === 'tsize') return start(e, { k: 'tsize' });
+  const it = BM.byId(S.m, h.id); if (!it) return;
+  if (h.h === 'v') return start(e, { k: 'vert', id: it.id, i: +h.i, base });
+  if (h.h === 'b') return start(e, { k: 'bend', id: it.id, i: +h.i, base });
+  if (h.h === 'rot') return start(e, { k: 'rot', id: it.id, base });
+  if (h.h === 'size') return start(e, { k: 'size', id: it.id, base });
+}
+function onMove(e){
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (S.pinch) return pinchMove();
+  const p = toWorld(e), d = S.drag;
+  if (d){
+    if (!d.moved){ if (Math.hypot(e.clientX - d.cx, e.clientY - d.cy) < 3) return; d.moved = true; updCursor(); }
+    dragMove(d, e, p); return paint();
+  }
+  hoverMove(e, p);
+}
+function hoverMove(e, p){
+  const t = S.tool; let hov = null;
+  if (S.scale){ S.scale.cur = p; return paint(); }
+  if (t === 'select'){ hov = hitAt(p); if (hov !== S.hover){ S.hover = hov; updCursor(); paint(); } return; }
+  if (t === 'wall' || t === 'curtain'){ const q = drawSnap(p, e); if (S.draw) S.draw.cur = q; return paint(); }
+  if (t === 'room'){ snapP(p, e); return paint(); }
+  if (t === 'door' || t === 'window'){
+    const r = BM.newDoor(S.m, p, { k: t, tol: Math.max(16, 14 / S.view.k) });
+    S.ghost = r.item ? { door: r.item } : { err: r.err };
+    if (r.err) showTip(e, esc(r.err)); else hideTip();
+    updCursor(); return paint();
+  }
+  if (POINT[t]){ const q = snapP(p, e), it = BM.newItem(S.m, t, q[0], q[1]);
+    S.ghost = { it, parts: null };
+    if (it && t === 'bay') try { S.ghost.parts = BM.autoBay(S.m, { ...it, id: '__ghost' }); } catch {}
+    return paint(); }
+}
+function dragMove(d, e, p){
+  const free = !snapOn(e);
+  if (d.k === 'pan'){ S.view = { ...S.view, x: d.vx + e.clientX - d.cx, y: d.vy + e.clientY - d.cy }; return; }
+  if (d.k === 'box'){ d.p1 = p; const b = { x0: Math.min(d.p0[0], p[0]), y0: Math.min(d.p0[1], p[1]), x1: Math.max(d.p0[0], p[0]), y1: Math.max(d.p0[1], p[1]) };
+    S.sel = [...new Set([...d.add, ...BM.marquee(S.m, b)])]; return; }
+  if (d.k === 'room'){ d.p1 = snapP(p, e); return; }
+  if (d.k === 'tmove'){ S.trace.x = rnd(d.x0 + p[0] - d.p0[0]); S.trace.y = rnd(d.y0 + p[1] - d.p0[1]); S.traceVer++; return; }
+  if (d.k === 'tsize'){ const T = S.trace, w = Math.max(40, p[0] - T.x); T.w = rnd(w); T.h = rnd(w * T.ih / T.iw); S.traceVer++; return; }
+  const m = JSON.parse(d.base);
+  if (d.k === 'move'){
+    let dx = p[0] - d.p0[0], dy = p[1] - d.p0[1]; S.guides = [];
+    const a = anchorOf(m, d.ids);
+    if (a && !free){ const line = ['wall', 'curtain', 'path'].includes(BM.byId(m, d.ids[0])?.k);
+      const r = BM.snap(m, [a[0] + dx, a[1] + dy], line ? { grid: true, skip: d.ids } : { grid: true, skip: d.ids, walls: false, ends: false, align: false });
+      dx = r.p[0] - a[0]; dy = r.p[1] - a[1]; S.guides = r.guides; }
+    BM.moveItems(m, d.ids, rnd(dx), rnd(dy));
+  } else if (d.k === 'slide'){
+    const it = BM.byId(m, d.id), r = BM.newDoor(m, p, { k: it.k, w: it.w, type: it.type, skip: it.id, tol: Math.max(16, 14 / S.view.k) });
+    if (r.item){ const same = r.item.wall === it.wall && r.item.seg === it.seg; Object.assign(it, { wall: r.item.wall, seg: r.item.seg, t: r.item.t });
+      if (!same && it.k === 'door') Object.assign(it, { flip: r.item.flip, hinge: r.item.hinge }); hideTip(); }
+    else showTip(e, esc(r.err));
+  } else if (d.k === 'tag'){
+    const b = BM.byId(m, d.id); b.tag = [rnd(p[0] + d.off[0]), rnd(p[1] + d.off[1])];
+  } else if (d.k === 'vert'){
+    const w = BM.byId(m, d.id); let q = [rnd(p[0]), rnd(p[1])]; S.guides = [];
+    if (!free){ const r = BM.snap(m, p, { grid: true, skip: [d.id], extra: w.pts.filter((_, j) => j !== d.i), tol: Math.max(10, 9 / S.view.k) }); q = r.p; S.guides = r.guides; }
+    BM.moveVertex(m, d.id, d.i, q);
+  } else if (d.k === 'bend'){
+    const w = BM.byId(m, d.id), g = BM.segsOf(w)[d.i]; if (!w.bend) w.bend = w.pts.map(() => 0); w.bend[d.i] = BM.bendAt(g.a, g.b, p);
+  } else if (d.k === 'rot'){
+    const it = BM.byId(m, d.id), dx = p[0] - it.x, dy = p[1] - it.y;
+    let a = it.k === 'bay' || it.k === 'chair' ? deg(Math.atan2(-dx, dy)) : deg(Math.atan2(dx, -dy)); if (!e.shiftKey) a = Math.round(a / 15) * 15;
+    BM.rotateItems(m, [it.id], BM.normA(a - (it.a || 0)));
+  } else if (d.k === 'size'){
+    const it = BM.byId(m, d.id), t = -rad(it.a || 0), vx = p[0] - it.x, vy = p[1] - it.y, lx = vx * Math.cos(t) - vy * Math.sin(t), ly = vx * Math.sin(t) + vy * Math.cos(t);
+    const q = v => free ? rnd(v) : Math.round(v / 4) * 4;
+    if (it.k === 'bay') it.r = clamp(free ? rnd(Math.hypot(vx, vy)) : Math.round(Math.hypot(vx, vy) / 2) * 2, 30, 160);
+    else if (it.k === 'table') it.s = clamp(q(it.shape === 'square' ? 2 * Math.max(Math.abs(lx), Math.abs(ly)) : 2 * Math.hypot(vx, vy)), 16, 160);
+    else { it.w = clamp(q(2 * Math.abs(lx)), 12, 800); it.h = clamp(q(2 * Math.abs(ly)), 12, 400); }
+  }
+  S.m = m; S.ver++;
+}
+// The point a moved selection snaps by: the first corner of a line, else the first item's centre.
+function anchorOf(m, ids){
+  for (const id of ids){ const it = BM.byId(m, id); if (!it) continue;
+    if (it.pts) return it.pts[0]; if (it.x != null) return [it.x, it.y];
+    if (it.k === 'path'){ const f = BM.flattenPath(it.d)[0]; if (f) return f[0]; } }
+  return null;
+}
+function onUp(e){
+  ptrs.delete(e.pointerId);
+  if (S.pinch){ if (ptrs.size < 2) S.pinch = null; return; }
+  const d = S.drag; if (!d) return;
+  S.drag = null; S.guides = []; hideTip();
+  if (d.k === 'room'){
+    if (d.moved){ const r = BM.newRoom(S.m, d.p0[0], d.p0[1], d.p1[0], d.p1[1]);
+      if (r){ S.sel = [r[1].id]; commit(); toast('ok', 'Room added. Type its name on the right, or keep drawing rooms.'); }
+      else toast('warn', 'That box is too small, or its walls are already drawn.'); }
+    else toast('info', 'Drag a box to draw a room.', 2600);
+  } else if (d.k === 'tmove' || d.k === 'tsize'){ if (d.moved) saveTrace(); }
+  else if (d.k === 'box'){ if (!d.moved){ S.sel = d.add; } renderInsp(); updHint(); }
+  else if (d.k === 'vert' && !d.moved){ S.vsel = { id: d.id, i: d.i }; }
+  else if (d.k === 'move' && !d.moved){ if (d.was && S.sel.length > 1){ S.sel = [d.hit]; renderInsp(); updHint(); } }
+  else if (d.moved && d.k !== 'pan') commit();
+  updCursor(); paint();
+}
+function onCancel(e){
+  ptrs.delete(e.pointerId); S.pinch = null;
+  const d = S.drag; S.drag = null; if (d && d.base){ S.m = JSON.parse(d.base); S.ver++; } S.guides = []; updCursor(); paint();
+}
+// Double-click: finish a line; straighten a bend; add a corner to a selected line; jump to a bay's or label's text.
+function onDbl(e){
+  const p = toWorld(e);
+  if (S.draw){ finishLine(false); return; }
+  if (S.tool !== 'select') return;
+  const under = document.elementFromPoint(e.clientX, e.clientY), h = under && under.closest && under.closest('[data-h]');   // the handle drawn now, not the one first clicked
+  if (h && h.dataset.h === 'b'){ const w = BM.byId(S.m, h.dataset.id); if (w && w.bend){ w.bend[+h.dataset.i] = 0; commit(); } return; }
+  if (h) return;
+  const it = sel1();
+  if (it && (it.k === 'wall' || it.k === 'curtain')){ const r = BM.nearSeg(it, p); if (r && r.d < 10 / S.view.k){ BM.insertVertex(S.m, it.id, r.seg, r.q); S.vsel = { id: it.id, i: r.seg + 1 }; commit(); } return; }
+  if (it && it.k === 'bay') return focusField('no', true);
+  if (it && it.k === 'label') return focusField('t', true);
+}
+function onWheel(e){
+  e.preventDefault(); const r = cv.getBoundingClientRect();
+  zoomAt(Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : e.ctrlKey ? 0.01 : 0.0016)), e.clientX - r.left, e.clientY - r.top);
+}
+function startPinch(){
+  const [a, b] = [...ptrs.values()], d = S.drag; S.drag = null;
+  if (d && d.base){ S.m = JSON.parse(d.base); S.ver++; }
+  S.pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, k: S.view.k, vx: S.view.x, vy: S.view.y, mx: (a[0] + b[0]) / 2, my: (a[1] + b[1]) / 2 };
+}
+function pinchMove(){
+  const [a, b] = [...ptrs.values()], P = S.pinch, r = cv.getBoundingClientRect(); if (!b) return;
+  const k = clamp(P.k * Math.hypot(a[0] - b[0], a[1] - b[1]) / P.d, 0.08, 8), wx = (P.mx - r.left - P.vx) / P.k, wy = (P.my - r.top - P.vy) / P.k;
+  S.view = { k, x: (a[0] + b[0]) / 2 - r.left - wx * k, y: (a[1] + b[1]) / 2 - r.top - wy * k }; updZoom(); paint();
+}
+
+// ---------- drawing tools ----------
+function lineClick(e, p){
+  const q = drawSnap(p, e);
+  if (!S.draw || S.draw.k !== S.tool) S.draw = { k: S.tool, pts: [], cur: q };
+  const D = S.draw, n = D.pts.length;
+  if (n && dist(q, D.pts[n - 1]) * S.view.k < 4) return;   // the second click of a double-click
+  if (D.k === 'wall' && n >= 3 && dist(q, D.pts[0]) < 0.5) return finishLine(true);
+  D.pts.push(q); D.cur = q; updHint(); paint();
+}
+// Turn the points drawn so far into a wall or curtain (closed = back to the first corner).
+function finishLine(closed){
+  const D = S.draw; S.draw = null; S.guides = [];
+  if (!D){ updHint(); return; }
+  const pts = D.pts.filter((p, i) => !i || dist(p, D.pts[i - 1]) > 0.5);
+  if (pts.length < 2){ updHint(); paint(); return; }
+  const it = BM.add(S.m, BM.newLine(D.k, pts, closed));
+  S.sel = [it.id]; commit(); updHint();
+}
+function placeDoor(e, p){
+  const r = BM.newDoor(S.m, p, { k: S.tool, tol: Math.max(16, 14 / S.view.k) });
+  if (r.err){ showTip(e, esc(r.err)); return; }
+  const it = BM.add(S.m, r.item); S.sel = [it.id]; S.ghost = null; commit();
+}
+function placeItem(k, q){
+  const it = BM.newItem(S.m, k, q[0], q[1]); if (!it) return;
+  BM.add(S.m, it); S.sel = [it.id]; S.ghost = null; commit();
+  if (k === 'label'){ setTool('select'); focusField('t', true); }
+}
+
+// ---------- trace image ----------
+function traceDown(e, p){
+  const T = S.trace; if (!T || T.lock) return;
+  if (p[0] >= T.x && p[0] <= T.x + T.w && p[1] >= T.y && p[1] <= T.y + T.h) start(e, { k: 'tmove', x0: T.x, y0: T.y, p0: p });
+}
+// The picture stays in this browser (localStorage when it fits); it is never uploaded or put in the map file.
+function saveTrace(){
+  S.traceVer++; paint();
+  if (!S.trace){ store.del(LS.trace); return; }
+  if (!store.set(LS.trace, S.trace) && !S.traceWarned){ S.traceWarned = true; toast('warn', 'This picture is too big to keep after you close the page. Your map is kept either way.'); }
+}
+function openImage(file){
+  if (!file) return;
+  if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) return toast('warn', 'PDFs can’t be opened here. Save the page as a PNG or JPG first (the Snipping Tool works), then open that.', 7000);
+  if (!/^image\//.test(file.type)) return toast('bad', 'Open a PNG or JPG picture of the floor plan.');
+  const fr = new FileReader();
+  fr.onload = () => { const img = new Image(); img.onload = () => {
+      const iw = img.naturalWidth, ih = img.naturalHeight, b = contentBox(), w = b && S.m.items.length ? Math.max(b.x1 - b.x0, 600) : 1000;
+      S.trace = { src: fr.result, iw, ih, x: b && S.m.items.length ? b.x0 : 0, y: b && S.m.items.length ? b.y0 : 0, w: rnd(w), h: rnd(w * ih / iw), op: 0.5, lock: false };
+      saveTrace(); setTool('trace'); fit();
+      toast('ok', 'Picture added. Use <b>Set scale</b> so it matches real sizes, then lock it and draw over it.', 6000); };
+    img.onerror = () => toast('bad', 'That picture can’t be opened. Try saving it as a PNG or JPG.'); img.src = fr.result; };
+  fr.readAsDataURL(file);
+}
+function scaleClick(p){
+  S.scale.pts.push(p); updHint(); paint();
+  if (S.scale.pts.length < 2) return;
+  const [a, b] = S.scale.pts, d = dist(a, b);
+  if (d * S.view.k < 12){ S.scale.pts = []; updHint(); return toast('warn', 'Click two points further apart.'); }
+  modal(`<h2 id="mh">How long is that in real life?</h2><p class="muted">Type the real distance between the two points you clicked.</p>
+    <label class="lbl" for="scl">Distance</label><input class="fld" id="scl" placeholder="For example: 12 ft 6 in" autocomplete="off" autofocus>
+    <p class="help bad" id="sclErr" hidden>Type a distance like 12 ft or 12 ft 6 in.</p>
+    <div class="row end"><button type="button" class="btn ghost" data-act="close">Cancel</button><button type="button" class="btn primary" data-act="scaleGo">Set scale</button></div>`,
+  { onClose: () => { S.scale = null; updHint(); paint(); }, enter: 'scaleGo' });
+}
+function scaleGo(){
+  const v = BM.parseFt($('#scl').value), [a, b] = S.scale.pts, T = S.trace;
+  if (!v || v < 4){ $('#sclErr').hidden = false; return; }
+  const k = v / dist(a, b);
+  Object.assign(T, { x: rnd(a[0] + (T.x - a[0]) * k), y: rnd(a[1] + (T.y - a[1]) * k), w: rnd(T.w * k), h: rnd(T.h * k) });
+  S.scale = null; closeModal(); saveTrace(); updHint(); renderInsp(); fit();
+  toast('ok', 'Scale set. The picture now matches real sizes. Lock it, then draw your walls over it.');
+}
+
+// ---------- keyboard ----------
+function onKey(e){
+  if (!$('#modal').hidden) return modalKey(e);
+  if (!$('#menu').hidden) return menuKey(e);
+  const t = e.target, k = e.key, mod = e.ctrlKey || e.metaKey;
+  const typing = t.matches && t.matches('input:not([type=checkbox]):not([type=range]),textarea,select');
+  if (typing){
+    if (k === 'Escape'){ t.blur(); e.preventDefault(); }
+    else if (k === 'Enter' && t.tagName === 'INPUT'){ e.preventDefault(); t.dispatchEvent(new Event('change', { bubbles: true })); }
+    return;
+  }
+  if (mod){
+    const K = k.toLowerCase();
+    if (K === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if (K === 'y'){ e.preventDefault(); redo(); }
+    else if (K === 's'){ e.preventDefault(); primary(); }
+    else if (K === '0'){ e.preventDefault(); fit(); }
+    else if (K === '=' || K === '+'){ e.preventDefault(); zoomBy(1.25); }
+    else if (K === '-'){ e.preventDefault(); zoomBy(0.8); }
+    else if (S.tab !== 'draw') return;
+    else if (K === 'c'){ if (S.sel.length){ e.preventDefault(); copySel(); } }
+    else if (K === 'x'){ if (S.sel.length){ e.preventDefault(); copySel(); delSel(); } }
+    else if (K === 'v'){ if (S.clip){ e.preventDefault(); pasteClip(); } }
+    else if (K === 'd'){ e.preventDefault(); dupSel(); }
+    else if (K === 'a'){ e.preventDefault(); S.sel = S.m.items.filter(i => i.k !== 'door' && i.k !== 'window').map(i => i.id); S.vsel = null; renderInsp(); updHint(); paint(); }
+    return;
+  }
+  if (e.altKey) return;
+  if (k === '?'){ e.preventDefault(); return help(); }
+  if (S.tab !== 'draw') return;
+  const onCtl = t.matches && t.matches('button,a,[role=slider],input,summary');
+  if (k === ' ' && !onCtl){ e.preventDefault(); if (!S.space){ S.space = true; updCursor(); } return; }
+  if (k === 'Escape') return escape();
+  if (k === 'Enter'){ if (S.draw){ e.preventDefault(); finishLine(false); } else if (POINT[S.tool] && t === cv){ e.preventDefault(); placeItem(S.tool, snapP(center(), null)); } return; }
+  if (k === 'Delete' || k === 'Backspace'){ e.preventDefault(); if (S.draw) return escape(); return delSel(); }
+  if (k.startsWith('Arrow')){ if (onCtl && t !== cv && t.closest('.seg,.opts,.tabs,.chips')) return; if (!S.sel.length && !S.vsel) return; e.preventDefault(); return nudge(k, e.shiftKey); }
+  if (k === '+' || k === '='){ return zoomBy(1.25); } if (k === '-'){ return zoomBy(0.8); } if (k === '0'){ return fit(); }
+  const K = k.toLowerCase();
+  if (K === 'r' && S.tool === 'select' && S.sel.length){ e.preventDefault(); return turnSel(e.shiftKey ? 90 : 15); }
+  if (K === 'f' && flipSel()) return;
+  if (e.shiftKey && K !== '?') return;
+  const tool = TOOLS.find(x => x !== '-' && x.key.length === 1 && x.key.toLowerCase() === K);
+  if (tool){ e.preventDefault(); if (tool.id === 'trace' && !S.trace) setTool('trace'); else setTool(tool.id); }
+}
+function onKeyUp(e){ if (e.key === ' ' && S.space){ S.space = false; updCursor(); } }
+// Esc steps back one thing at a time: scale clicks, a drag, the last corner, the selection, then back to Select.
+function escape(){
+  hideTip();
+  if (S.scale){ S.scale = null; updHint(); return paint(); }
+  if (S.drag){ const d = S.drag; S.drag = null; if (d.base){ S.m = JSON.parse(d.base); S.ver++; } S.guides = []; updCursor(); return paint(); }
+  if (S.draw){ S.draw.pts.pop(); if (!S.draw.pts.length) S.draw = null; updHint(); return paint(); }
+  if (S.vsel){ S.vsel = null; return paint(); }
+  if (S.sel.length){ S.sel = []; renderInsp(); updHint(); return paint(); }
+  if (S.tool !== 'select') setTool('select');
+}
+function nudge(k, big){
+  const step = (S.m.grid || BM.GRID) * (big ? 4 : 1), v = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[k];
+  if (S.vsel){ const w = BM.byId(S.m, S.vsel.id), p = w && w.pts[S.vsel.i]; if (p){ BM.moveVertex(S.m, w.id, S.vsel.i, [p[0] + v[0] * step, p[1] + v[1] * step]); commit(); } return; }
+  const it = sel1();
+  if (it && (it.k === 'door' || it.k === 'window')){
+    const g = BM.segsOf(BM.byId(S.m, it.wall))[it.seg]; if (!g) return;
+    const u = [(g.b[0] - g.a[0]) / g.len, (g.b[1] - g.a[1]) / g.len], sgn = Math.sign(u[0] * v[0] + u[1] * v[1]) || 1;
+    const f = BM.doorFit(S.m, it.wall, it.seg, it.t + sgn * step / g.len, it.w, it.id); if (f.ok){ it.t = f.t; commit(); }
+    return;
+  }
+  BM.moveItems(S.m, S.sel, v[0] * step, v[1] * step); commit();
+}
+function turnSel(d){ const ids = S.sel.filter(id => !['door', 'window'].includes(BM.byId(S.m, id)?.k)); if (!ids.length) return; BM.rotateItems(S.m, ids, d); commit(); }
+function flipSel(){ const L = S.sel.map(id => BM.byId(S.m, id)).filter(i => i && i.k === 'door'); if (!L.length) return false; for (const d of L) d.flip = !d.flip; commit(); return true; }
+function delSel(){
+  if (S.vsel){ const w = BM.byId(S.m, S.vsel.id);
+    if (w && w.pts.length <= (w.closed ? 3 : 2)) return ask('Delete the whole wall?', `A ${w.k === 'curtain' ? 'curtain' : 'wall'} needs at least ${w.closed ? 3 : 2} corners, so removing this one removes all of it.`, 'Delete it', () => { BM.remove(S.m, [w.id]); S.vsel = null; S.sel = []; commit(); updHint(); });
+    if (w){ BM.removeVertex(S.m, w.id, S.vsel.i); S.vsel = null; commit(); } return; }
+  if (!S.sel.length) return;
+  BM.remove(S.m, S.sel); S.sel = []; commit(); updHint();
+}
+function copySel(){ const ids = new Set(S.sel); S.clip = JSON.parse(JSON.stringify(S.m.items.filter(i => ids.has(i.id) || ((i.k === 'door' || i.k === 'window') && ids.has(i.wall))))); S.pasteN = 0; toast('info', `Copied${S.sel.length > 1 ? ` ${S.sel.length} things` : ''}. Ctrl+V pastes a copy.`, 2000); }
+function pasteClip(){ S.pasteN++; S.sel = BM.paste(S.m, S.clip, 16 * S.pasteN, 16 * S.pasteN); S.vsel = null; commit(); updHint(); }
+function dupSel(){ if (!S.sel.length) return; S.sel = BM.dup(S.m, S.sel, 16, 16); S.vsel = null; commit(); updHint(); }
+
+// ---------- inspector ----------
+const fid = (f, v) => `i-${f}${v != null ? '-' + String(v).replace(/[^\w-]/g, '') : ''}`;
+function txt(f, label, v, o = {}){
+  const err = S.ferr[f];
+  return `<label class="lbl" for="${fid(f)}">${label}</label><input class="fld" id="${fid(f)}" data-f="${f}"${o.live ? ' data-live' : ''} value="${esc(v)}" autocomplete="off" spellcheck="false"${o.attrs ? ' ' + o.attrs : ''}${err || o.help ? ` aria-describedby="${fid(f)}-h"` : ''}>${err ? `<p class="help bad" id="${fid(f)}-h">${esc(err)}</p>` : o.help ? `<p class="help" id="${fid(f)}-h">${o.help}</p>` : ''}`;
+}
+function seg(f, label, opts, cur){
+  return `<div class="lbl" id="${fid(f)}-l">${label}</div><div class="seg" role="group" aria-labelledby="${fid(f)}-l">${opts.map(([v, t]) => `<button type="button" data-f="${f}" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}">${t}</button>`).join('')}</div>`;
+}
+function chk(f, label, on, small = '', id = ''){
+  return `<label class="check"><input type="checkbox" data-f="${f}"${id ? ` data-id="${esc(id)}"` : ''}${on ? ' checked' : ''}><span class="l">${label}${small ? `<small>${small}</small>` : ''}</span></label>`;
+}
+const pin = (what, on, act) => `<div class="pin"><span><b>${what}</b> · ${on ? 'placed by you' : 'automatic'}</span>${on ? `<button type="button" class="linkbtn" data-act="${act}">Reset to automatic</button>` : ''}</div>`;
+// Which way a seated patient faces on the screen, in plain words.
+function facing(a){
+  const v = ((Math.round(BM.normA(a) / 45) % 8) + 8) % 8;
+  return 'Faces ' + ['down', 'down and left', 'left', 'up and left', 'up', 'up and right', 'right', 'down and right'][v];
+}
+function dialHTML(a){
+  const ticks = Array.from({ length: 24 }, (_, i) => { const r = rad(i * 15), o = i % 6 ? 40 : 37; return `<path class="tick" d="M${Math.sin(r) * o} ${-Math.cos(r) * o}L${Math.sin(r) * 43} ${-Math.cos(r) * 43}"/>`; }).join('');
+  return `<div class="dialrow"><div class="dial" role="slider" tabindex="0" data-dial data-f="dial" aria-label="Chair direction" aria-valuemin="-180" aria-valuemax="180" aria-valuenow="${Math.round(a)}" aria-valuetext="${facing(a)}, ${Math.round(BM.normA(a))} degrees">
+    <svg viewBox="-50 -50 100 100" aria-hidden="true"><circle class="ring" r="46"/>${ticks}<g class="dch" transform="rotate(${a})"><path class="ray" d="M0 10V31"/><rect x="-9" y="-11" width="18" height="21" rx="4"/><rect class="bk" x="-9" y="-11" width="18" height="6.5" rx="3"/><circle class="knob" cx="0" cy="34" r="6.5"/></g></svg></div>
+    <div><div class="dialv" id="dialv">${facing(a)}</div><div class="row"><button type="button" class="btn sm" data-act="turnL" aria-label="Turn 15 degrees left">${icon('rotL')}</button><button type="button" class="btn sm" data-act="turnR" aria-label="Turn 15 degrees right">${icon('rotR')}</button></div>
+    ${sel1()?.k === 'bay' ? '<button type="button" class="linkbtn" data-act="faceWall">Back to the nearest wall</button>' : ''}</div></div>`;
+}
+const noErr = no => { const s = String(no ?? '').trim();
+  if (!s) return 'Give the bay a number.';
+  if (!BM.BAY_RE.test(s) || /^bay/i.test(s)) return 'Use up to 8 letters or digits, like 4 or 2A.';
+  if (S.m.items.filter(i => i.k === 'bay' && String(i.no ?? '').trim().toLowerCase() === s.toLowerCase()).length > 1) return `Another bay is numbered ${s}.`;
+  return ''; };
+const bayNo = id => String(BM.byId(S.m, id)?.no ?? '').trim() || '?';
+const straightBtn = it => (it.bend || []).some(Boolean) ? '<div class="btns"><button type="button" class="btn sm" data-act="straight">Straighten all curves</button></div>' : '';
+const INSP = {
+  bay: b => { const err = noErr(b.no), sz = Object.keys(BM.SIZES).find(k => BM.SIZES[k] === b.r) || '';
+    return `${txt('no', 'Bay number', b.no ?? '', { live: true, attrs: 'maxlength="8"', help: err ? `<span class="help bad" id="noMsg">${esc(err)}</span>` : '<span id="noMsg">The number staff pick for a visit, like 4 or 2A.</span>' })}
+    ${seg('size', 'Rug size', [['S', 'Small'], ['M', 'Medium'], ['L', 'Large']], sz)}
+    ${txt('across', 'Rug across', BM.fmtFt(2 * b.r), { help: 'Medium fits one recliner with room to walk round it.' })}
+    <div class="lbl">Chair direction</div>${dialHTML(b.a || 0)}
+    ${seg('side', 'Side table', [['auto', 'Auto'], ['left', 'Left'], ['right', 'Right'], ['none', 'None']], b.table ? '' : b.side)}
+    <p class="help">Left and right as the patient sits. Auto picks the side with more room.</p>
+    <div class="pins">${pin('Label', !!b.tag, 'tagAuto')}${b.chair ? pin('Chair', true, 'chairAuto') : ''}${b.table ? pin('Side table', true, 'tableAuto') : ''}</div>`; },
+  door: d => `${txt('dw', 'Width', BM.fmtFt(d.w))}
+    <div class="chips" role="group" aria-label="Common widths">${[[40, '2 ft 6 in'], [48, '3 ft'], [64, '4 ft'], [96, '6 ft']].map(([w, t]) => `<button type="button" data-f="dwu" data-v="${w}" aria-pressed="${Math.abs(d.w - w) < 0.5}">${t}</button>`).join('')}</div>
+    ${seg('dtype', 'Kind', [['swing', 'Swing'], ['double', 'Double'], ['slide', 'Sliding'], ['open', 'Opening']], d.type)}
+    ${d.type === 'swing' || d.type === 'double' ? `<div class="btns"><button type="button" class="btn sm" data-act="flip">Swing the other way <kbd>F</kbd></button>${d.type === 'swing' ? '<button type="button" class="btn sm" data-act="hinge">Hinge on the other side</button>' : ''}</div>` : ''}
+    <p class="help">${d.type === 'open' ? 'An opening is a gap in the wall with no door.' : 'Drag the door along its wall to move it.'}</p>`,
+  window: w => `${txt('dw', 'Width', BM.fmtFt(w.w))}
+    <div class="chips" role="group" aria-label="Common widths">${[[32, '2 ft'], [48, '3 ft'], [64, '4 ft'], [96, '6 ft']].map(([v, t]) => `<button type="button" data-f="dwu" data-v="${v}" aria-pressed="${Math.abs(w.w - v) < 0.5}">${t}</button>`).join('')}</div>
+    <p class="help">Drag the window along its wall to move it.</p>`,
+  wall: w => { const G = BM.segsOf(w), len = G.reduce((t, g) => t + g.len, 0);
+    return `${seg('thin', 'Kind of wall', [['0', 'Outside wall'], ['1', 'Inside wall']], w.thin ? '1' : '0')}
+    <p class="help">Inside walls are drawn thinner, like partitions.</p>
+    <dl class="facts"><dt>Length</dt><dd>${BM.fmtFt(len)}</dd><dt>Corners</dt><dd>${w.pts.length}</dd><dt>Shape</dt><dd>${w.closed ? 'Closed, all the way round' : 'Open line'}</dd></dl>
+    ${straightBtn(w)}
+    <p class="help">Drag a corner to move it. Drag the small round handle in the middle of a side to curve it; double-click the handle to straighten. Double-click a side to add a corner. Click a corner and press Delete to remove it.</p>`; },
+  curtain: c => { const auto = BM.layout(S.m).curtains.get(c.id) || [], bays = S.m.items.filter(i => i.k === 'bay'), man = !!c.bays;
+    return `${chk('cman', 'Choose its bays myself', man, man ? '' : `It screens ${auto.length ? auto.map(id => 'bay ' + esc(bayNo(id))).join(', ') : 'no bay yet'}, worked out from where it runs.`)}
+    ${man ? `<fieldset class="bays"><legend class="lbl">Bays it screens</legend>${bays.length ? bays.map(b => chk('cbay', `Bay ${esc(bayNo(b.id))}`, c.bays.includes(b.id), '', b.id)).join('') : '<p class="help">There are no bays yet.</p>'}</fieldset>` : ''}
+    ${chk('rev', 'Bunch at the other end', !!c.rev, 'The diamond marks where it gathers when it’s open.')}
+    ${straightBtn(c)}
+    <p class="help">In the tracker a curtain shows closed while a patient is in any bay it screens, and bunched at one end the rest of the time.</p>`; },
+  chair: c => `<div class="lbl">Direction</div>${dialHTML(c.a || 0)}<p class="help">A spare recliner. To make it a bay, delete it and add a Bay instead.</p>`,
+  table: t => `${seg('shape', 'Shape', [['round', 'Round'], ['square', 'Square']], t.shape)}${txt('ts', 'Size', BM.fmtFt(t.s))}${t.shape === 'square' ? turnBtns() : ''}`,
+  label: l => `${txt('t', 'Text', l.t ?? '', { live: true, attrs: 'maxlength="40"' })}${chk('small', 'Smaller text', !!l.small, 'For notes like “Nurse station”.')}`,
+  path: p => `<p class="sub">This came from the built-in map, so it moves and deletes as one piece. To change its shape, draw a new ${p.layer === 'curtain' ? 'curtain' : p.layer} and delete this one, or start from the template “Two rooms, 5 bays”, which has the same rooms drawn with real walls.</p>`,
+};
+const turnBtns = () => '<div class="btns"><button type="button" class="btn sm" data-act="turnL">' + icon('rotL') + 'Turn left</button><button type="button" class="btn sm" data-act="turnR">' + icon('rotR') + 'Turn right</button></div>';
+for (const k of Object.keys(BM.FURN)) INSP[k] = f => `<div class="two" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div>${txt('fw', 'Width', BM.fmtFt(f.w))}</div><div>${txt('fh', 'Depth', BM.fmtFt(f.h))}</div></div>${turnBtns()}<div class="btns"><button type="button" class="btn sm" data-act="hug">Line up with the nearest wall</button></div>`;
+
+// Redraw the inspector, keeping focus and the caret. Replacing the focused field fires its blur and change events,
+// which can ask for another redraw: that one waits until this finishes.
+function renderInsp(){
+  if (S.tab !== 'draw') return;
+  if (S.inInsp){ S.inspAgain = true; return; }
+  S.inInsp = true;
+  try { renderInsp1(); } finally { S.inInsp = false; }
+  if (S.inspAgain){ S.inspAgain = false; renderInsp(); }
+}
+function renderInsp1(){
+  const a = document.activeElement, key = a && insp.contains(a) ? (a.dataset.f ? a.dataset.f + '|' + (a.dataset.v ?? a.dataset.id ?? '') : a.dataset.act ? 'act|' + a.dataset.act : null) : null;
+  const ss = a && a.selectionStart, se = a && a.selectionEnd, top = insp.scrollTop;
+  insp.innerHTML = inspHTML();
+  insp.scrollTop = top;
+  if (key){ const [f, v] = key.split('|'), el = f === 'act' ? insp.querySelector(`[data-act="${v}"]`) : $$('[data-f]', insp).find(x => x.dataset.f === f && (x.dataset.v ?? x.dataset.id ?? '') === v);
+    if (el){ el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch {} } }
+}
+function inspHTML(){
+  if (S.tool === 'trace') return traceHTML();
+  const sel = S.sel.map(id => BM.byId(S.m, id)).filter(Boolean);
+  if (!sel.length) return mapHTML();
+  if (sel.length > 1){
+    const n = {}; for (const it of sel) n[BM.itemName(S.m, it).replace(/ .*/, '')] = (n[BM.itemName(S.m, it).replace(/ .*/, '')] || 0) + 1;
+    return `<section class="panel"><div class="ph"><h2>${sel.length} things selected</h2><button type="button" class="ib" data-act="desel" aria-label="Done" title="Done (Esc)">${icon('x')}</button></div>
+      <p class="sub">${Object.entries(n).map(([k, c]) => `${c} × ${esc(k.toLowerCase())}`).join(', ')}</p>${turnBtns()}
+      <div class="acts"><button type="button" class="btn sm" data-act="dup">${icon('dup')}Duplicate</button><button type="button" class="btn sm ghost del" data-act="del">${icon('trash')}Delete</button></div></section>`;
+  }
+  const it = sel[0], iss = S.issues.filter(x => x.ids.includes(it.id));
+  return `<section class="panel"><div class="ph"><h2>${esc(BM.itemName(S.m, it))}</h2><button type="button" class="ib" data-act="desel" aria-label="Done" title="Done (Esc)">${icon('x')}</button></div>
+    ${iss.map(x => `<div class="msg ${x.level === 'error' ? 'bad' : x.level === 'warn' ? 'warn' : 'info'}">${esc(x.msg)}</div>`).join('')}
+    ${(INSP[it.k] || (() => ''))(it)}
+    <div class="acts"><button type="button" class="btn sm" data-act="dup">${icon('dup')}Duplicate</button><button type="button" class="btn sm ghost del" data-act="del">${icon('trash')}Delete</button></div></section>`;
+}
+function checklistHTML(){
+  const L = S.issues, bad = L.filter(x => x.level === 'error').length, warn = L.filter(x => x.level === 'warn').length;
+  const sum = [bad ? `${bad} to fix` : '', warn ? `${warn} to look at` : ''].filter(Boolean).join(', ');
+  const body = !S.m.items.length ? '<p class="sub" style="margin-top:6px">Problems show up here as you draw.</p>'
+    : !L.length ? `<div class="ready">${icon('check')}<div><b>Ready for the tracker</b><p>Nothing to fix. ${S.tab === 'preview' ? 'If it looks right' : 'Look at Preview, then'} ${S.host ? 'Save to tracker' : 'Download file'}.</p></div></div>`
+    : `<ul class="issues">${L.map((x, i) => `<li><button type="button" class="iss ${x.level}${x.ids.length ? '' : ' nolink'}" data-act="issue" data-i="${i}">${icon(x.level)}<span>${esc(x.msg)}</span></button></li>`).join('')}</ul>`;
+  return `<div class="ph"><h2>Checklist${sum ? ` <small>${sum}</small>` : ''}</h2></div>${body}`;
+}
+function mapHTML(){
+  const m = S.m, cnt = k => m.items.filter(i => i.k === k || (i.k === 'path' && i.layer === k)).length;
+  const facts = [['bay', 'bay'], ['label', 'room name'], ['door', 'door'], ['window', 'window'], ['curtain', 'curtain']].map(([k, w]) => [cnt(k), w]).filter(([n]) => n).map(([n, w]) => `${n} ${w}${n > 1 ? 's' : ''}`).join(' · ');
+  const list = m.items;
+  return `<section class="panel">${checklistHTML()}</section>
+  <section class="panel"><div class="ph"><h2>Map</h2></div>
+    ${txt('name', 'Name', m.name || '', { live: true, attrs: 'maxlength="60" placeholder="For example: Treatment rooms"' })}
+    ${txt('clinic', 'Clinic code', m.clinic || '', { live: true, attrs: 'maxlength="20" placeholder="Optional"' })}
+    ${facts ? `<p class="help" style="margin-top:12px">${facts}</p>` : ''}
+    <div style="margin-top:8px">${chk('snap', 'Snap to the grid and corners', S.prefs.snap, 'Hold Alt while you drag to place things freely.')}${chk('grid', 'Show the grid', S.prefs.grid, 'Small squares are 6 in, big squares 4 ft.')}</div>
+  </section>
+  ${S.host ? '' : '<div class="msg info note">Download the file, then in ESK Tracker › Settings › Bay map choose Load a map file.</div>'}
+  ${list.length ? `<details class="panel everything"${S.listOpen ? ' open' : ''}><summary>Everything on the map <span class="clsum">${list.length}</span></summary><ul>${list.map(it => `<li><button type="button" data-act="pick" data-id="${esc(it.id)}">${esc(BM.itemName(m, it))}</button></li>`).join('')}</ul></details>` : ''}`;
+}
+function traceHTML(){
+  const T = S.trace;
+  return `<section class="panel"><div class="ph"><h2>Trace image</h2><button type="button" class="ib" data-act="traceDone" aria-label="Done" title="Done (Esc)">${icon('x')}</button></div>
+    <p class="sub">Open a picture of your floor plan, then draw your walls over it. The picture stays in this browser. It isn’t uploaded and isn’t saved in the map file.</p>
+    <div class="btns"><button type="button" class="btn${T ? '' : ' primary'}" data-act="img">${icon('open')}${T ? 'Open a different picture…' : 'Open a picture…'}</button></div>
+    <p class="help">PNG or JPG. Have a PDF? Save the page as a picture first (the Snipping Tool works), then open that.</p>
+    ${T ? `<label class="lbl" for="${fid('top')}">How strong the picture shows</label><input class="range" type="range" id="${fid('top')}" data-f="top" min="10" max="100" step="5" value="${Math.round(T.op * 100)}">
+    ${chk('tlock', 'Lock the picture', !!T.lock, 'So it doesn’t move while you draw.')}
+    <div class="lbl">Scale</div><p class="help" style="margin-top:0">Click two points you know the distance between, like the two ends of a wall, then type that distance.</p>
+    <div class="btns"><button type="button" class="btn sm${S.scale ? ' primary' : ''}" data-act="scale">${S.scale ? 'Click two points on the picture…' : 'Set scale'}</button></div>
+    <dl class="facts"><dt>Picture width</dt><dd>${BM.fmtFt(T.w)}</dd></dl>
+    <div class="acts"><button type="button" class="btn sm ghost del" data-act="imgDel">${icon('trash')}Remove the picture</button></div>` : ''}</section>`;
+}
+// One field changed in the inspector or the top bar. now = finished (one undo step); otherwise just redraw.
+function setF(f, v, now, el){
+  const it = sel1(), m = S.m, err = msg => { S.ferr[f === 'dwu' ? 'dw' : f] = msg; renderInsp(); };
+  S.ferr[f === 'dwu' ? 'dw' : f] = null;
+  switch (f){
+    case 'name': m.name = String(v).slice(0, 60); syncTop(); break;
+    case 'clinic': m.clinic = String(v).slice(0, 20); syncTop(); break;
+    case 'snap': case 'grid': S.prefs[f] = !!v; store.set(LS.prefs, S.prefs); return paint();
+    case 'top': S.trace.op = clamp(+v / 100, 0.1, 1); S.traceVer++; if (now) saveTrace(); return paint();
+    case 'tlock': S.trace.lock = !!v; saveTrace(); return renderInsp();
+    case 'no': { it.no = String(v).trim().slice(0, 8); const e = noErr(it.no), h = $('#noMsg'); if (h){ h.textContent = e || 'The number staff pick for a visit, like 4 or 2A.'; h.className = e ? 'help bad' : ''; } break; }
+    case 'size': it.r = BM.SIZES[v]; break;
+    case 'across': { const u = BM.parseFt(v); if (!u || u < 60 || u > 320) return err('Type a size between 4 ft and 20 ft, like 7 ft 3 in.'); it.r = rnd(u / 2); break; }
+    case 'side': it.side = v; it.table = null; break;
+    case 'dw': case 'dwu': { const w = f === 'dwu' ? +v : BM.parseFt(v); if (!w || w < 16) return err('Type a width like 3 ft or 2 ft 8 in.');
+      const fit = BM.doorFit(m, it.wall, it.seg, it.t, w, it.id); if (fit.err) return err(fit.err); it.w = w; it.t = fit.t; break; }
+    case 'dtype': it.type = v; if (v === 'double' && it.w < 64){ const fit = BM.doorFit(m, it.wall, it.seg, it.t, 96, it.id); if (fit.ok){ it.w = 96; it.t = fit.t; } } break;
+    case 'thin': it.thin = v === '1'; break;
+    case 'cman': it.bays = v ? (BM.layout(m).curtains.get(it.id) || []).slice() : null; break;
+    case 'cbay': { const id = el.dataset.id; it.bays = v ? [...new Set([...(it.bays || []), id])] : (it.bays || []).filter(x => x !== id); break; }
+    case 'rev': it.rev = !!v; break;
+    case 'shape': it.shape = v; break;
+    case 'ts': { const u = BM.parseFt(v); if (!u || u < 12 || u > 160) return err('Type a size like 2 ft 6 in.'); it.s = u; break; }
+    case 'fw': case 'fh': { const u = BM.parseFt(v); if (!u || u < 8 || u > 800) return err('Type a size like 6 ft or 2 ft 6 in.'); it[f === 'fw' ? 'w' : 'h'] = u; break; }
+    case 't': it.t = String(v).slice(0, 40); break;
+    case 'small': it.small = !!v; break;
+    default: return;
+  }
+  if (now) commit(); else touch();
+}
+const ACT = {
+  desel: () => { S.sel = []; S.vsel = null; renderInsp(); updHint(); paint(); },
+  dup: () => dupSel(), del: () => delSel(),
+  turnL: () => turnSel(-15), turnR: () => turnSel(15),
+  faceWall: () => { const b = sel1(); const a = BM.faceWall(S.m, b.x, b.y); BM.rotateItems(S.m, [b.id], BM.normA(a - (b.a || 0))); b.chair = null; b.table = null; commit(); },
+  tagAuto: () => { sel1().tag = null; commit(); }, chairAuto: () => { sel1().chair = null; commit(); }, tableAuto: () => { sel1().table = null; commit(); },
+  flip: () => flipSel(), hinge: () => { const d = sel1(); d.hinge = d.hinge === 'b' ? 'a' : 'b'; commit(); },
+  straight: () => { const w = sel1(); w.bend = w.pts.map(() => 0); commit(); },
+  hug: () => { BM.hugWall(S.m, sel1()); commit(); },
+  issue: el => { const x = S.issues[+el.dataset.i]; if (!x || !x.ids.length) return; if (S.tab !== 'draw') setTab('draw'); if (S.tool !== 'select') setTool('select');
+    S.sel = x.ids.filter(id => BM.byId(S.m, id)); S.vsel = null; reveal(S.sel); renderInsp(); updHint(); paint(); },
+  pick: el => { if (S.tool !== 'select') setTool('select'); S.sel = [el.dataset.id]; S.listOpen = true; reveal(S.sel); renderInsp(); updHint(); paint(); },
+  img: () => $('#imgIn').click(),
+  imgDel: () => ask('Remove the picture?', 'Your drawing stays as it is.', 'Remove it', () => { S.trace = null; S.scale = null; saveTrace(); renderInsp(); }),
+  scale: () => { if (S.scale){ S.scale = null; } else { S.scale = { pts: [] }; cv.focus(); } updHint(); updCursor(); renderInsp(); paint(); },
+  traceDone: () => setTool('select'),
+};
+function onInspClick(e){
+  const b = e.target.closest('button'); if (!b || !insp.contains(b) && !$('#pvSide').contains(b)) return;
+  if (b.dataset.act && ACT[b.dataset.act]) return ACT[b.dataset.act](b);
+  if (b.dataset.f && b.dataset.v != null) setF(b.dataset.f, b.dataset.v, true, b);
+}
+function onInspInput(e){ const el = e.target; if (!el.dataset.f) return; if (el.dataset.live != null) setF(el.dataset.f, el.value, false, el); else if (el.type === 'range') setF(el.dataset.f, el.value, false, el); }
+function onInspChange(e){ const el = e.target; if (!el.dataset.f) return; setF(el.dataset.f, el.type === 'checkbox' ? el.checked : el.value, true, el); }
+function focusField(f, select){ renderInsp(); const el = insp.querySelector(`[data-f="${f}"]`); if (el){ el.focus(); if (select) el.select(); } }
+// The chair dial: drag round it (15° steps, Shift for any angle) or use the arrow keys.
+function dialDown(e){
+  const d = e.target.closest('[data-dial]'); if (!d) return;
+  e.preventDefault(); d.focus(); try { d.setPointerCapture(e.pointerId); } catch {}
+  S.dial = { el: d }; dialAt(e);
+}
+function dialAt(e){
+  const r = S.dial.el.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+  if (Math.hypot(dx, dy) < 6) return;
+  let a = deg(Math.atan2(-dx, dy)); if (!e.shiftKey) a = Math.round(a / 15) * 15;
+  setAngle(a, false);
+}
+function setAngle(a, now){
+  const it = sel1(); if (!it) return; const d = BM.normA(a - (it.a || 0));
+  if (d) BM.rotateItems(S.m, [it.id], d);
+  const el = insp.querySelector('[data-dial]');
+  if (el){ el.querySelector('.dch').setAttribute('transform', `rotate(${it.a})`); el.setAttribute('aria-valuenow', Math.round(it.a)); el.setAttribute('aria-valuetext', `${facing(it.a)}, ${Math.round(it.a)} degrees`); $('#dialv').textContent = facing(it.a); }
+  if (now) commit(); else touch();
+}
+
+// ---------- top bar, tabs, menu ----------
+function setTab(t){
+  S.tab = t; const pv = t === 'preview';
+  $('#work').classList.toggle('pvmode', pv); $('#pv').hidden = !pv;
+  $('#tabDraw').setAttribute('aria-selected', String(!pv)); $('#tabPv').setAttribute('aria-selected', String(pv));
+  $('#tabDraw').tabIndex = pv ? -1 : 0; $('#tabPv').tabIndex = pv ? 0 : -1;
+  if (S.draw) finishLine(false);
+  hideTip(); hideCoach(false);
+  if (pv) renderPreview(); else { renderInsp(); paint(); }
+}
+const MENU = () => [
+  ['templates', icon('grid') + 'Templates…'], ['open', icon('open') + 'Open a map file…'], ['download', icon('down') + 'Download file'], ['startOver', icon('restart') + 'Start over…'], '-',
+  'Colors', ['th:', 'Match this computer', !S.prefs.theme], ['th:light', 'Light', S.prefs.theme === 'light'], ['th:dark', 'Dark', S.prefs.theme === 'dark'],
+];
+function openMenu(){
+  const M = $('#menu'), b = $('#bFile'), r = b.getBoundingClientRect();
+  M.innerHTML = MENU().map(x => x === '-' ? '<hr>' : typeof x === 'string' ? `<div class="mh">${x}</div>` : x.length === 3
+    ? `<button type="button" role="menuitemradio" aria-checked="${x[2]}" data-m="${x[0]}"><span class="mk">${x[2] ? '✓' : ''}</span>${x[1]}</button>` : `<button type="button" role="menuitem" data-m="${x[0]}">${x[1]}</button>`).join('');
+  M.hidden = false; M.style.top = (r.bottom + 6) + 'px'; M.style.left = Math.max(8, Math.min(window.innerWidth - M.offsetWidth - 8, r.right - M.offsetWidth)) + 'px';
+  b.setAttribute('aria-expanded', 'true'); M.querySelector('button').focus();
+}
+function closeMenu(refocus = true){ const M = $('#menu'); if (M.hidden) return; M.hidden = true; $('#bFile').setAttribute('aria-expanded', 'false'); if (refocus) $('#bFile').focus(); }
+function menuKey(e){
+  const L = $$('#menu button'), i = L.indexOf(document.activeElement);
+  if (e.key === 'Escape' || e.key === 'Tab'){ e.preventDefault(); return closeMenu(); }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); L[(i + (e.key === 'ArrowDown' ? 1 : -1) + L.length) % L.length].focus(); }
+  if (e.key === 'Home'){ e.preventDefault(); L[0].focus(); } if (e.key === 'End'){ e.preventDefault(); L[L.length - 1].focus(); }
+}
+function menuPick(m){
+  closeMenu(false);
+  if (m.startsWith('th:')){ S.prefs.theme = m.slice(3); store.set(LS.prefs, S.prefs); applyTheme(); if (S.tab === 'preview') renderPreview(); return; }
+  ({ templates, open: () => $('#fileIn').click(), download, startOver }[m] || (() => {}))();
+}
+function applyTheme(){ if (S.prefs.theme) document.documentElement.dataset.theme = S.prefs.theme; else delete document.documentElement.dataset.theme; }
+const isDark = () => S.prefs.theme ? S.prefs.theme === 'dark' : !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+
+// ---------- modal, toast ----------
+function modal(html, o = {}){
+  const M = $('#modal'); S.modalBack = document.activeElement; S.modalO = o;
+  M.innerHTML = `<div class="sheet${o.wide ? ' wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="mh">${html}</div>`;
+  M.hidden = false; $('#app').inert = true; closeMenu(false);
+  (M.querySelector('[autofocus]') || M.querySelector('.btn.primary') || M.querySelector('button')).focus();
+}
+function closeModal(){
+  const M = $('#modal'); if (M.hidden) return; const o = S.modalO || {};
+  M.hidden = true; M.innerHTML = ''; $('#app').inert = false; S.modalO = null;
+  if (o.onClose) o.onClose();
+  if (S.modalBack && S.modalBack.focus && document.contains(S.modalBack)) S.modalBack.focus();
+}
+function modalKey(e){
+  if (e.key === 'Escape'){ e.preventDefault(); closeModal(); }
+  else if (e.key === 'Enter' && S.modalO && S.modalO.enter && e.target.tagName === 'INPUT'){ e.preventDefault(); MACT[S.modalO.enter](); }
+}
+// A yes/no question in the page (never a browser popup).
+function ask(title, body, ok, fn, o = {}){
+  S.askFn = fn;
+  modal(`<h2 id="mh">${title}</h2><p class="muted">${body}</p><div class="row end"><button type="button" class="btn ghost" data-act="close">${o.cancel || 'Cancel'}</button><button type="button" class="btn primary${o.bad ? ' bad' : ''}" data-act="askOk">${ok}</button></div>`);
+}
+const MACT = {
+  close: () => closeModal(),
+  askOk: () => { const f = S.askFn; S.askFn = null; S.modalO = { ...S.modalO, onClose: null }; closeModal(); if (f) f(); },
+  scaleGo: () => scaleGo(),
+  tpl: el => useTemplate(el.dataset.id),
+  coachAgain: () => { closeModal(); startCoach(); },
+  keepDraft: () => { const f = S.keepFn; S.modalO = { ...S.modalO, onClose: null }; closeModal(); f(true); },
+  useHost: () => { const f = S.keepFn; S.modalO = { ...S.modalO, onClose: null }; closeModal(); f(false); },
+  closeAnyway: () => { S.modalO = { ...S.modalO, onClose: null }; closeModal(); hostSend({ ev: 'bmClose' }); },
+};
+function toast(kind, html, ms = 4000){
+  const T = $('#toast'), el = document.createElement('div');
+  el.className = `msg ${kind}`; el.setAttribute('role', kind === 'bad' ? 'alert' : 'status'); el.innerHTML = html;
+  for (const o of [...T.children]) if (o.innerHTML === el.innerHTML) o.remove();
+  T.appendChild(el);
+  while (T.children.length > 2) T.firstElementChild.remove();
+  setTimeout(() => el.remove(), ms);
+}
+function busy(t){ $('#busy').hidden = !t; $('#busyT').textContent = t || ''; }
+
+// ---------- templates, files ----------
+// A static tracker-style drawing of a plan with every bay open (template pictures).
+function planHTML(P, bays, o = {}){
+  const W = P.w, H = P.h, el = o.el || 'div', lit = b => !!(b.row || b.busy), used = id => lit(bays.find(b => b.id === id) || {});
+  const pos = b => `left:${bpPct(b.cx - b.r, W)};top:${bpPct(b.cy - b.r, H)};width:${bpPct(2 * b.r, W)}`;
+  const bay = b => el === 'button' ? `<button class="bay" tabindex="-1" data-state="${b.st}" aria-current="${!!b.cur}" aria-label="Bay ${esc(b.id)}" style="${pos(b)}"></button>` : `<div class="bay" data-state="${b.st}" style="${pos(b)}"></div>`;
+  const tag = b => `<div class="btag" data-state="${b.st}" style="left:${bpPct(b.tag[0], W)};top:${bpPct(b.tag[1], H)}" aria-hidden="true"><div class="n"><span class="num">${esc(b.id)}</span>${esc(b.title)}</div><div class="s"><span class="dot"></span><span class="tx">${esc(b.s)}</span></div></div>`;
+  return `<div class="bplan" style="aspect-ratio:${W}/${H}${o.style ? ';' + o.style : ''}">
+      <svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${bpUnder(P, used)}</svg>
+      ${bpRooms(P)}${bays.map(bay).join('')}
+      <svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${bpOver(P, bays, lit)}</svg>
+      ${o.tags === false ? '' : bays.map(tag).join('')}</div>`;
+}
+const openBays = P => P.bays.map(b => ({ ...b, st: 'open', title: 'Open', s: 'Nobody booked' }));
+function templates(){
+  const L = BM.templates();
+  const thumb = m => { if (!m.items.some(i => i.k === 'bay')) return '<span class="blank">An empty page</span>';
+    const P = BM.exportPlan(m, { savedAt: '' }); return planHTML(P, openBays(P), { tags: false, style: `width:min(100%,${(134 * P.w / P.h).toFixed(1)}px)` }); };
+  modal(`<h2 id="mh">Start from a template</h2><p class="muted">The template replaces what’s on the page now${S.m.items.length ? '. Undo (Ctrl+Z) brings your map back' : ''}.</p>
+    <div class="tpls">${L.map(t => `<button type="button" class="tpl" data-act="tpl" data-id="${t.id}"><div class="thumb">${thumb(t.model)}</div><b>${esc(t.name)}</b><span>${esc(t.desc)}</span></button>`).join('')}</div>
+    <div class="row end"><button type="button" class="btn ghost" data-act="close">Cancel</button></div>`, { wide: true });
+}
+function useTemplate(id){
+  const t = BM.templates().find(x => x.id === id); if (!t) return;
+  const had = S.m.items.length; closeModal(); hideCoach(true);
+  setModel(JSON.parse(JSON.stringify(t.model)), false); setTool('select'); requestAnimationFrame(() => fit());
+  if (had) toast('ok', `Started from “${esc(t.name)}”. Undo brings your previous map back.`);
+}
+function openFile(file){
+  if (!file) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    let x; try { x = JSON.parse(fr.result); } catch { return toast('bad', 'That file isn’t a bay map. Bay map files end in .json.'); }
+    const c = bpCheck(x); if (c.err) return toast('bad', esc(c.err));
+    const m = BM.importPlan(x); if (!m) return toast('bad', 'That map can’t be opened here.');
+    const had = S.m.items.length; setModel(m, false); setTool('select'); requestAnimationFrame(() => fit());
+    toast('ok', `Opened “${esc(m.name || file.name)}”.${had ? ' Undo brings your previous map back.' : ''}`);
+  };
+  fr.onerror = () => toast('bad', 'That file can’t be read.');
+  fr.readAsText(file);
+}
+// Errors in the checklist block saving and downloading; point the practice lead at them.
+function blocked(){
+  const n = S.issues.filter(x => x.level === 'error').length; if (!n) return false;
+  if (S.tab !== 'draw') setTab('draw'); if (S.tool !== 'select') setTool('select'); S.sel = []; renderInsp(); updHint(); paint();
+  toast('bad', `Fix ${n === 1 ? 'the problem' : `the ${n} problems`} marked in red in the checklist first.`); return true;
+}
+function download(){
+  runCheck(); if (blocked()) return;
+  const P = BM.exportPlan(S.m, { savedAt: new Date().toISOString() }), name = String(S.m.name || 'New bay map').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'New bay map';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(P, null, 2)], { type: 'application/json' })); a.download = `Bay map - ${name}.json`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('ok', S.host ? 'File downloaded.' : 'File downloaded. In ESK Tracker › Settings › Bay map choose <b>Load a map file</b>.', 7000);
+}
+function startOver(){
+  ask('Start over?', 'Everything on the page is cleared. Download the file first if you may want this map again.', 'Start over', () => {
+    setModel(BM.newModel('New bay map'), true); S.sel = []; setTool('select'); S.view = { k: 1, x: 40, y: 40 }; updZoom(); paint(); renderInsp(); }, { bad: true });
+}
+const primary = () => S.host ? saveToTracker() : download();
+function help(){
+  const row = (k, t) => `<div><span>${t}</span><span>${k.split(' ').map(x => `<kbd>${x}</kbd>`).join('')}</span></div>`;
+  modal(`<h2 id="mh">Shortcuts</h2><p class="muted">Letters pick a tool. Nothing here is needed: every action also has a button.</p>
+    <div class="keys"><h3>Tools</h3>${TOOLS.filter(t => t !== '-').map(t => row(t.key, t.name)).join('')}
+    <h3>Changing things</h3>${[['Ctrl+Z', 'Undo'], ['Ctrl+Y', 'Redo'], ['Ctrl+C Ctrl+V', 'Copy, paste'], ['Ctrl+D', 'Duplicate'], ['Delete', 'Delete'], ['Arrows', 'Nudge (Shift: further)'],
+      ['R', 'Turn 15° (Shift: 90°)'], ['F', 'Swing a door the other way'], ['Enter', 'Finish a wall or curtain'], ['Esc', 'Take back a corner, or stop'],
+      ['Shift', 'Any angle while drawing'], ['Alt', 'No snapping while dragging'], ['+ − 0', 'Zoom in, out, fit'], ['Ctrl+S', S.host ? 'Save to tracker' : 'Download file']].map(([k, t]) => row(k, t)).join('')}</div>
+    <div class="row end"><button type="button" class="btn ghost" data-act="coachAgain">Show the getting-started tips again</button><button type="button" class="btn primary" data-act="close">Close</button></div>`, { wide: true });
+}
+
+// ---------- first run ----------
+const COACH = [
+  { t: 'Draw your rooms', b: 'Pick <b>Room</b> and drag a box for each treatment room. Use <b>Wall</b> for other shapes. Drag the middle of a wall to curve it.', tools: ['room', 'wall'] },
+  { t: 'Add the doors', b: 'Pick <b>Door</b> and click on a wall where each door is. Press <b>F</b> to swing it the other way. Windows work the same way.', tools: ['door', 'window'] },
+  { t: 'Place the bays', b: 'Pick <b>Bay</b> and click where each recliner goes. The chair, side table, lantern and label are placed for you. Then check <b>Preview</b> to see it as the tracker will.', tools: ['bay'], tab: true },
+];
+function startCoach(){ S.coach = 0; drawCoach(); }
+function drawCoach(){
+  const c = COACH[S.coach], el = $('#coach');
+  $$('.tool.hl').forEach(b => b.classList.remove('hl')); $('#tabPv').style.boxShadow = '';
+  if (!c){ el.hidden = true; return; }
+  for (const t of c.tools) $(`.tool[data-tool="${t}"]`).classList.add('hl');
+  if (c.tab) $('#tabPv').style.boxShadow = '0 0 0 2px var(--accent)';
+  el.innerHTML = `<div class="steps">${COACH.map((_, i) => `<i class="${i <= S.coach ? 'on' : ''}"></i>`).join('')}</div><p class="k">Step ${S.coach + 1} of ${COACH.length}</p><h3>${c.t}</h3><p>${c.b}</p>
+    <div class="row"><button type="button" class="btn ghost mute sm" data-act="coachSkip">Skip</button><span class="grow"></span>${S.coach ? '<button type="button" class="btn sm" data-act="coachBack">Back</button>' : ''}<button type="button" class="btn primary sm" data-act="coachNext">${S.coach === COACH.length - 1 ? 'Got it' : 'Next'}</button></div>`;
+  el.hidden = false;
+}
+function hideCoach(done){ if (S.coach < 0) return; if (done){ S.coach = -1; store.set(LS.coach, 1); drawCoach(); } }
+const STAGE_ACT = {
+  coachNext: () => { S.coach++; if (S.coach >= COACH.length){ S.coach = -1; store.set(LS.coach, 1); } drawCoach(); },
+  coachBack: () => { S.coach = Math.max(0, S.coach - 1); drawCoach(); },
+  coachSkip: () => { S.coach = -1; store.set(LS.coach, 1); drawCoach(); },
+  toolRoom: () => { setTool('room'); cv.focus(); }, toolTrace: () => setTool('trace'), templates: () => templates(),
+};
+
+// ---------- preview ----------
+const PV = {
+  wide: { name: 'Wide', desc: 'Full screen on a desktop, map 900 px wide', map: 900 },
+  pane: { name: 'Task pane', desc: 'The Excel side pane, 360 px wide', frame: 360 },
+  bays: { name: 'ESK Bays', desc: 'Provider view, map 760 px wide, with another provider’s patients', map: 760, prov: true },
+};
+const SAMPLE = { track: 'Roomed 9:40', soon: 'Vitals due 10:20', late: 'Vitals overdue · 10:05', ready: 'Ready to discharge', busy: 'In use until ~11:15', open: 'Nobody booked' };
+const BAY_ORDER = { late: 0, soon: 1, ready: 2, track: 3, open: 4, busy: 5 };
+// Made-up visits spread over the bays so every state shows. Never real names.
+function sampleBays(P, prov){
+  const seq = prov ? ['track', 'busy', 'soon', 'open', 'ready', 'busy', 'late'] : ['track', 'soon', 'open', 'late', 'ready'];
+  let n = 0;
+  const bays = P.bays.map((b, i) => { const st = seq[i % seq.length];
+    if (st === 'open') return { ...b, st, title: 'Open', s: prov ? 'Open' : SAMPLE.open };
+    if (st === 'busy') return { ...b, st, busy: true, title: 'Another provider', s: SAMPLE.busy };
+    return { ...b, st, row: true, title: `Patient ${String.fromCharCode(65 + (n++ % 26))}`, s: SAMPLE[st] }; });
+  const cur = bays.slice().sort((x, y) => BAY_ORDER[x.st] - BAY_ORDER[y.st] || String(x.id).localeCompare(String(y.id), undefined, { numeric: true }))[0];
+  if (cur) cur.cur = true;
+  return bays;
+}
+function pvDoc(P, mode, theme){
+  const spec = PV[mode], bays = sampleBays(P, spec.prov), used = bays.filter(b => b.row || b.busy).length, late = bays.filter(b => b.st === 'late').length;
+  const mine = bays.filter(b => b.row).length, ready = bays.filter(b => b.st === 'ready').length;
+  const head = spec.prov ? [`${mine} of your patients in a bay`, ready ? `${ready} ready to discharge` : '', late ? `${late} overdue for vitals` : ''].filter(Boolean).join(' · ')
+    : [`${used} of ${bays.length} bays in use`, late ? `${late} overdue` : ''].filter(Boolean).join(' · ');
+  const key = `<ul class="bkey" aria-label="Key"><li><span class="bsw" data-k="open"></span>Open</li><li><span class="bsw" data-k="track"></span>In chair</li><li><span class="bsw" data-k="soon"></span>Due soon or needs a step</li><li><span class="bsw" data-k="late"></span>Vitals overdue</li><li><span class="bsw" data-k="ready"></span>Ready to discharge</li>${spec.prov ? '<li><span class="bsw" data-k="busy"></span>Another provider’s patient</li>' : ''}</ul>`;
+  const css = ['tok', 'base', 'ctl', 'eskMap'].map(id => $('#' + id).textContent).join('\n') + 'main{padding:16px}main.pane{padding:4px 12px 16px}.bwrap{display:block}body{overflow:hidden}';
+  return `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><base href="${esc(location.href.replace(/[?#].*$/, ''))}"><style>${css}</style></head>
+    <body><main class="${mode}"><div class="pg-today"><details class="card bmap" open><summary>Bay map <span class="muted">${esc(head)}</span></summary>
+    <div class="bwrap"><div class="bleft">${planHTML(P, bays, { el: 'button' })}${key}</div></div></details></div></main></body></html>`;
+}
+function renderPreview(){
+  const mode = S.pv.w, theme = S.pv.theme || (isDark() ? 'dark' : 'light'), spec = PV[mode];
+  const issues = S.issues.filter(x => x.level !== 'tip');
+  $('#pvSide').innerHTML = `<section class="panel"><div class="ph"><h2>Preview</h2></div><p class="sub">The map as ESK Tracker draws it. Made-up visits are spread across the bays so you can see every state.</p>
+    <div class="lbl" id="pvW">Where it shows</div><div class="opts" role="radiogroup" aria-labelledby="pvW">${Object.entries(PV).map(([k, v]) => `<button type="button" role="radio" aria-checked="${k === mode}" data-pv="${k}"><b>${v.name}</b><span>${v.desc}</span></button>`).join('')}</div>
+    ${seg('pvt', 'Colors', [['light', 'Light'], ['dark', 'Dark']], theme)}</section>
+    <section class="panel">${checklistHTML()}${issues.length ? '<p class="help">Click a line to fix it on the drawing.</p>' : ''}</section>`;
+  let P = null, err = '';
+  try { const c = bpCheck(BM.exportPlan(S.m, { savedAt: '' })); P = c.plan; err = c.err || ''; } catch (e){ console.error(e); err = 'The map can’t be drawn yet.'; }
+  $('#pvSize').hidden = !P; $('#pvBad').hidden = !!P; $('.pvcap').hidden = !P;
+  if (!P){ $('#pvBad').innerHTML = `<div class="msg warn">${esc(S.m.items.some(i => i.k === 'bay') ? err : 'Add at least one bay to see the preview.')}</div>`; return; }
+  const fw = spec.frame || spec.map + 68, fr = $('#pvFrame');
+  $('#pvCap').textContent = `${spec.name} · ${theme === 'dark' ? 'dark' : 'light'}`;
+  fr.style.width = fw + 'px';
+  const size = () => { try { fr.style.height = '0px'; fr.style.height = fr.contentDocument.documentElement.scrollHeight + 'px'; } catch {} fitPreview(); };
+  fr.onload = () => { size(); try { fr.contentDocument.fonts.ready.then(size); } catch {} };
+  fr.srcdoc = pvDoc(P, mode, theme);
+}
+// Shrink the preview to fit the space (never enlarge it), and say so.
+function fitPreview(){
+  const st = $('#pvStage'), fr = $('#pvFrame'), fw = parseFloat(fr.style.width) || 1, fh = parseFloat(fr.style.height) || fr.offsetHeight, avail = st.clientWidth - 48, s = Math.min(1, avail / fw);
+  const box = $('#pvBox'), size = $('#pvSize');
+  box.style.transform = s < 1 ? `scale(${s})` : ''; size.style.width = Math.floor(fw * s) + 'px'; size.style.height = Math.ceil(fh * s) + 'px';
+  $('#pvNote').textContent = s < 1 ? `Shown at ${Math.round(s * 100)}% to fit here` : 'Actual size';
+}
+function onPvClick(e){
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.pv){ S.pv.w = b.dataset.pv; return renderPreview(); }
+  if (b.dataset.f === 'pvt'){ S.pv.theme = b.dataset.v; return renderPreview(); }
+  if (b.dataset.act && ACT[b.dataset.act]) ACT[b.dataset.act](b);
+}
+
+// ---------- ESK Tracker link ----------
+// Same chunking as ESK (sendChunks/makeRx), so long plans fit through Office's message size limit.
+const CH = 12000;
+function sendChunks(fn, obj){ const s = JSON.stringify(obj); const id = Math.random().toString(36).slice(2); const n = Math.max(1, Math.ceil(s.length / CH)); for (let i = 0; i < n; i++) fn(JSON.stringify({ c: id, i, n, d: s.slice(i * CH, (i + 1) * CH) })); }
+function makeRx(handler){ const buf = {}; return str => { let m; try { m = JSON.parse(str); } catch { return; } if (!m || !m.c) return; const b = buf[m.c] || (buf[m.c] = []); b[m.i] = m.d; if (b.filter(x => x != null).length === m.n){ delete buf[m.c]; try { handler(JSON.parse(b.join(''))); } catch (e){ console.error(e); } } }; }
+function hostSend(obj){
+  try {
+    if (S.host === 'office') sendChunks(s => Office.context.ui.messageParent(s), obj);
+    else if (S.host === 'frame') window.parent.postMessage(obj, location.origin);
+  } catch (e){ console.error(e); }
+}
+// Opened with ?from=esk: as an in-page frame from the tracker (same site), or as an Office dialog. Anything else is standalone.
+function connectHost(){
+  if (!FROM_ESK) return;
+  let same = false; try { same = window.parent !== window && window.parent.location.origin === location.origin; } catch {}
+  if (same){
+    S.host = 'frame';
+    window.addEventListener('message', e => { if (e.source === window.parent && e.origin === location.origin) onHost(e.data); });
+    return hostReady();
+  }
+  // office.js is loaded here, not in <head>: inside the tracker page's frame it would navigate the frame away, and on its own
+  // the page doesn't need it. If it can't load (offline), the page simply works on its own.
+  const js = document.createElement('script');
+  js.src = 'https://appsforoffice.microsoft.com/lib/1/hosted/office.js';
+  js.onload = () => { if (!window.Office || !Office.onReady) return;
+    Office.onReady(() => {
+      if (!Office.context || !Office.context.ui || typeof Office.context.ui.messageParent !== 'function') return;
+      S.host = 'office'; const rx = makeRx(onHost);
+      try { Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, a => rx(a.message), () => hostReady()); } catch { hostReady(); }
+    }); };
+  document.head.appendChild(js);
+}
+function hostReady(){
+  $('#bClose').hidden = false; $('#bSave').textContent = 'Save to tracker'; updStatus(); renderInsp();
+  busy('Opening the map from ESK Tracker…');
+  S.loadT = setTimeout(() => { busy(''); if (!S.loaded){ S.host = null; $('#bClose').hidden = true; $('#bSave').textContent = 'Download file'; updStatus(); renderInsp(); toast('warn', 'ESK Tracker didn’t answer, so you’re working on this computer only. Download the file when you’re done.', 8000); } }, 8000);
+  hostSend({ ev: 'bmReady' });
+}
+function onHost(m){
+  if (!m || typeof m !== 'object') return;
+  if (m.ev === 'bmLoad') return hostLoad(m);
+  if (m.ev === 'bmSaved') return hostSaved(m);
+}
+// The tracker's map (or the built-in one, as editable walls) becomes the starting point, unless this computer has newer changes.
+function hostLoad(msg){
+  clearTimeout(S.loadT); busy(''); S.loaded = true; S.hostBuiltIn = !msg.plan;
+  S.hostBays = Array.isArray(msg.bays) ? msg.bays.map(String).filter(Boolean) : [];
+  let hm = msg.plan ? BM.importPlan(msg.plan) : null;
+  if (msg.plan && !hm) toast('warn', 'The tracker’s map couldn’t be opened here, so this starts from the built-in rooms.');
+  if (!hm){ hm = JSON.parse(JSON.stringify(BM.templates().find(t => t.id === 'two-rooms').model)); hm.name = 'ESK rooms'; }
+  S.savedSig = sig(hm);
+  const d = store.get(LS.draft), dm = d && BM.cleanModel(d.model);
+  const go = keep => { setModel(keep ? dm : hm, true); setTool('select'); requestAnimationFrame(() => fit()); scheduleCheck(); };
+  if (dm && dm.items.length && sig(dm) !== S.savedSig){
+    S.keepFn = go;
+    const when = d.at ? new Date(d.at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'earlier';
+    modal(`<h2 id="mh">Pick up where you left off?</h2><p class="muted">This computer has changes from ${esc(when)} that aren’t in the tracker yet.</p>
+      <div class="row end"><button type="button" class="btn ghost" data-act="useHost">Use the tracker’s map</button><button type="button" class="btn primary" data-act="keepDraft">Keep my changes</button></div>`, { onClose: () => go(true) });
+  } else go(false);
+}
+function saveToTracker(){
+  if (S.saving) return;
+  runCheck(); if (blocked()) return;
+  const c = bpCheck(BM.exportPlan(S.m, { savedAt: new Date().toISOString() }));
+  if (c.err) return toast('bad', esc(c.err));
+  S.saving = true; S.pendSig = sig(S.m); $('#bSave').disabled = true; $('#bSave').textContent = 'Saving…'; updStatus();
+  S.saveT = setTimeout(() => hostSaved({ ok: false, err: 'The tracker didn’t answer. Try again, or download the file and load it in Settings › Bay map.' }), 20000);
+  hostSend({ ev: 'bmSave', plan: c.plan });
+}
+function hostSaved(m){
+  clearTimeout(S.saveT); if (!S.saving) return;
+  S.saving = false; $('#bSave').disabled = false; $('#bSave').textContent = 'Save to tracker';
+  if (m.ok){ S.savedSig = S.pendSig; S.hostBuiltIn = false; S.dirty = sig(S.m) !== S.savedSig;
+    toast('ok', 'Saved to the tracker. Everyone using this workbook now sees this map.', 6000);
+    if (m.warn) toast('warn', esc(m.warn), 9000); }
+  else toast('bad', esc(m.err || 'The tracker couldn’t save the map.'), 9000);
+  updStatus();
+}
+function closeHost(){
+  runCheck();
+  if (S.dirty) return modal(`<h2 id="mh">Close without saving to the tracker?</h2><p class="muted">Your changes stay on this computer, so you can pick them up next time.</p>
+    <div class="row end"><button type="button" class="btn ghost" data-act="close">Keep editing</button><button type="button" class="btn primary" data-act="closeAnyway">Close</button></div>`);
+  hostSend({ ev: 'bmClose' });
+}
+
+// ---------- start ----------
+function boot(){
+  applyTheme(); buildRail();
+  $('#bUndo').innerHTML = icon('undo'); $('#bRedo').innerHTML = icon('redo'); $('#bHelp').innerHTML = icon('help');
+  $('#bFile').insertAdjacentHTML('beforeend', icon('chev'));
+  $('#zOut').innerHTML = icon('minus'); $('#zIn').innerHTML = icon('plus'); $('#zFit').innerHTML = icon('fit');
+  $('#rail').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
+  cv.addEventListener('pointerdown', onDown); cv.addEventListener('pointermove', onMove); cv.addEventListener('pointerup', onUp); cv.addEventListener('pointercancel', onCancel);
+  cv.addEventListener('dblclick', onDbl); cv.addEventListener('wheel', onWheel, { passive: false }); cv.addEventListener('contextmenu', e => e.preventDefault());
+  cv.addEventListener('pointerleave', () => { if (!S.drag){ S.ghost = null; S.hover = null; if (S.scale) S.scale.cur = null; hideTip(); updCursor(); paint(); } });
+  document.addEventListener('keydown', onKey); document.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', () => { S.space = false; updCursor(); });
+  insp.addEventListener('click', onInspClick); insp.addEventListener('input', onInspInput); insp.addEventListener('change', onInspChange);
+  insp.addEventListener('pointerdown', dialDown);
+  insp.addEventListener('pointermove', e => { if (S.dial) dialAt(e); });
+  insp.addEventListener('pointerup', () => { if (S.dial){ S.dial = null; commit(); } });
+  insp.addEventListener('keydown', e => { if (!e.target.matches('[data-dial]')) return; const it = sel1(); if (!it) return;
+    const d = { ArrowLeft: -15, ArrowDown: -15, ArrowRight: 15, ArrowUp: 15, PageDown: -90, PageUp: 90 }[e.key]; if (!d) return;
+    e.preventDefault(); e.stopPropagation(); setAngle((it.a || 0) + d, true); });
+  insp.addEventListener('toggle', e => { if (e.target.classList.contains('everything')) S.listOpen = e.target.open; }, true);
+  $('#pvSide').addEventListener('click', onPvClick);
+  stage.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && STAGE_ACT[b.dataset.act]) STAGE_ACT[b.dataset.act](b); });
+  $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') return closeModal(); const b = e.target.closest('[data-act]'); if (b && MACT[b.dataset.act]) MACT[b.dataset.act](b); });
+  $('#menu').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) menuPick(b.dataset.m); });
+  document.addEventListener('pointerdown', e => { if (!$('#menu').hidden && !e.target.closest('#menu,#bFile')) closeMenu(false); });
+  $('#bFile').addEventListener('click', () => $('#menu').hidden ? openMenu() : closeMenu());
+  $('#bUndo').addEventListener('click', undo); $('#bRedo').addEventListener('click', redo); $('#bHelp').addEventListener('click', help);
+  $('#bSave').addEventListener('click', primary); $('#bClose').addEventListener('click', closeHost);
+  $('#zIn').addEventListener('click', () => zoomBy(1.25)); $('#zOut').addEventListener('click', () => zoomBy(0.8)); $('#zFit').addEventListener('click', () => fit());
+  for (const [id, f] of [['#mName', 'name'], ['#mClinic', 'clinic']]){ const el = $(id);
+    el.addEventListener('input', () => setF(f, el.value, false)); el.addEventListener('change', () => setF(f, el.value, true)); }
+  $$('.tabs [role=tab]').forEach(b => { b.addEventListener('click', () => setTab(b.dataset.tab));
+    b.addEventListener('keydown', e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft'){ e.preventDefault(); const t = S.tab === 'draw' ? 'preview' : 'draw'; setTab(t); $(t === 'draw' ? '#tabDraw' : '#tabPv').focus(); } }); });
+  $('#fileIn').addEventListener('change', e => { openFile(e.target.files[0]); e.target.value = ''; });
+  $('#imgIn').addEventListener('change', e => { openImage(e.target.files[0]); e.target.value = ''; });
+  window.addEventListener('resize', () => { paint(); if (S.tab === 'preview') fitPreview(); });
+  window.matchMedia && matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (S.tab === 'preview') renderPreview(); });
+  const d = store.get(LS.draft), m = d && BM.cleanModel(d.model), T = store.get(LS.trace);
+  if (T && typeof T.src === 'string' && /^data:image\//.test(T.src) && [T.x, T.y, T.w, T.h, T.iw, T.ih].every(Number.isFinite)) S.trace = { ...T, op: clamp(+T.op || 0.5, 0.1, 1) };
+  setModel(m || BM.newModel('New bay map'), true);
+  setTool('select'); S.saved = 'ok'; updStatus();
+  requestAnimationFrame(() => { if (S.m.items.length || S.trace) fit(); else { S.view = { k: 1, x: 40, y: 40 }; updZoom(); paint(); } });
+  if (!store.get(LS.coach)) startCoach();
+  connectHost();
+}
+boot();
+</script>
+</body>
+</html>
