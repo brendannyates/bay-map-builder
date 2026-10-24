@@ -34,6 +34,11 @@ function segNear(p, a, b){
   const t = L2 ? clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2, 0, 1) : 0, q = [a[0] + dx * t, a[1] + dy * t];
   return { d: dist(p, q), t, q };
 }
+// Which side of a polyline p is on (+1 = the right of travel on screen, −1 = the left), judged at its nearest segment.
+function sideOf(p, pts){
+  let best = null; for (let i = 1; i < pts.length; i++){ const r = segNear(p, pts[i - 1], pts[i]); if (!best || r.d < best.d) best = { d: r.d, a: pts[i - 1], b: pts[i] }; }
+  return best && cross([best.b[0] - best.a[0], best.b[1] - best.a[1]], [p[0] - best.a[0], p[1] - best.a[1]]) >= 0 ? 1 : -1;
+}
 const distPoly = (p, pts) => { let d = Infinity; for (let i = 1; i < pts.length; i++) d = Math.min(d, segNear(p, pts[i - 1], pts[i]).d); return pts.length === 1 ? dist(p, pts[0]) : d; };
 // Do segments pq and rs cross (touching counts)?
 function segX(p, q, r, s){
@@ -53,6 +58,8 @@ function segBox(p, q, b){
   return true;
 }
 const polyBox = (pts, b) => { for (let i = 1; i < pts.length; i++) if (segBox(pts[i - 1], pts[i], b)) return true; return pts.length === 1 && inBox(pts[0], b); };
+// Is p inside the polygon pts (even-odd)?
+const inPoly = (p, pts) => { let k = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const a = pts[i], b = pts[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) k = !k; } return k; };
 const bbox = pts => { const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }; for (const p of pts) grow(b, p[0], p[1]); return b; };
 const grow = (b, x, y, r = 0) => { b.x0 = Math.min(b.x0, x - r); b.y0 = Math.min(b.y0, y - r); b.x1 = Math.max(b.x1, x + r); b.y1 = Math.max(b.y1, y + r); return b; };
 const join = (b, c) => { if (c && isFinite(c.x0)) { grow(b, c.x0, c.y0); grow(b, c.x1, c.y1); } return b; };
@@ -206,8 +213,16 @@ function nextBayNo(m){
   const used = new Set(m.items.filter(i => i.k === 'bay').map(b => String(b.no ?? '').trim().toLowerCase()));
   let n = 1; while (used.has(String(n))) n++; return String(n);
 }
-// Add an item (gives it an id when it has none or a taken one) and return it.
-function add(m, it){ if (!it.id || byId(m, it.id)) it.id = nextId(m, it.k); m.items.push(it); return it; }
+// Add an item (gives it an id when it has none or a taken one) and return it. A new bay joins any hand-picked curtain list
+// whose track runs past it (so deleting and re-placing a bay keeps its curtains), and a new door moves a room name out of
+// its swing. link:false skips both (pasting, where copies land on top of the originals for a moment).
+function add(m, it, link = true){
+  if (!it.id || byId(m, it.id)) it.id = nextId(m, it.k);
+  m.items.push(it);
+  if (link && it.k === 'bay') for (const c of m.items) if (Array.isArray(c.bays) && !c.bays.includes(it.id) && autoCurtainBays(m, c).includes(it.id)) c.bays.push(it.id);
+  if (link && it.k === 'door') clearLabels(m, it);
+  return it;
+}
 
 // Check a stored model and copy just the fields the builder knows. Returns null when it can't be trusted (importPlan then falls back).
 function cleanModel(x){
@@ -246,8 +261,9 @@ function openingSeg(m, o){
   const w = byId(m, o.wall); if (!w || w.k !== 'wall') return { err: 'This door or window isn’t on a wall any more.' };
   const g = segsOf(w)[o.seg]; if (!g) return { err: 'This door or window isn’t on a wall any more.' };
   if (g.s) return { err: 'Doors and windows only go on straight walls. Straighten the wall (double-click its middle handle) or move it.', g, w };
-  const e = (w.thin ? THIN : WALL) / 2 + 2;
-  if (o.w > g.len - 2 * e) return { err: `This ${o.k === 'door' ? 'door' : 'window'} is wider than its wall.`, g, w };
+  const e = (w.thin ? THIN : WALL) / 2 + 2, c = o.t * g.len, what = o.k === 'door' ? 'door' : 'window';
+  if (o.w > g.len - 2 * e) return { err: `This ${what} is wider than its wall.`, g, w };
+  if (c - o.w / 2 < e - 0.5 || c + o.w / 2 > g.len - e + 0.5) return { err: `This ${what} runs past the end of its wall. Slide it along the wall.`, g, w };
   return { g, w };
 }
 // Gap ends of an opening, the unit vector along its wall and the normal its door swings toward.
@@ -272,21 +288,23 @@ function windowD(m, win){ const G = openingGeo(m, win); return G ? `M${P(G.g0)}L
 // Wall path with gaps cut where its doors and windows sit. Curved segments are never cut (they refuse openings).
 function wallD(m, w){
   const S = segsOf(w); if (!S.length) return '';
-  const pieces = [];
+  const pieces = [], pt = (g, u) => [g.a[0] + (g.b[0] - g.a[0]) * u / g.len, g.a[1] + (g.b[1] - g.a[1]) * u / g.len];
+  let cut = false;
   for (const g of S){
     const cuts = g.s ? [] : m.items.filter(o => isOpening(o) && o.wall === w.id && o.seg === g.i && !openingSeg(m, o).err)
       .map(o => { const c = clamp(o.t, 0, 1) * g.len; return [clamp(c - o.w / 2, 0, g.len), clamp(c + o.w / 2, 0, g.len)]; }).sort((a, b) => a[0] - b[0]);
-    let at = 0, after = false;
-    for (const [c0, c1] of cuts){ if (c0 > at + 0.01) pieces.push({ g, u0: at, u1: c0, after }); at = Math.max(at, c1); after = true; }
-    if (at < g.len - 0.01) pieces.push({ g, u0: at, u1: g.len, after });
+    if (cuts.length) cut = true;
+    let at = 0;
+    for (const [c0, c1] of cuts){ if (c0 > at + 0.01) pieces.push({ g, u0: at, u1: c0 }); at = Math.max(at, c1); }
+    if (at < g.len - 0.01) pieces.push({ g, u0: at, u1: g.len });
   }
-  const cut = pieces.some(p => p.after);
+  for (const p of pieces){ p.s = p.g.s ? p.g.a : pt(p.g, p.u0); p.e = p.g.s ? p.g.b : pt(p.g, p.u1); }
   let list = pieces;
-  if (w.closed && cut){ const k = list.findIndex(p => p.after && p.u0 > 0); if (k > 0) list = [...list.slice(k), ...list.slice(0, k)]; }
-  const pt = (g, u) => [g.a[0] + (g.b[0] - g.a[0]) * u / g.len, g.a[1] + (g.b[1] - g.a[1]) * u / g.len];
+  // A cut closed wall starts just after a gap, so every run is drawn in one stroke and corners stay joined.
+  if (w.closed && cut){ const k = list.findIndex((p, i) => dist(list[(i + list.length - 1) % list.length].e, p.s) > 0.01); if (k > 0) list = [...list.slice(k), ...list.slice(0, k)]; }
   let d = '', pen = null;
   list.forEach((p, k) => {
-    const s = p.g.s ? p.g.a : pt(p.g, p.u0), e = p.g.s ? p.g.b : pt(p.g, p.u1);
+    const { s, e } = p;
     if (!pen || dist(pen, s) > 0.01) d += `M${P(s)}`;
     d += w.closed && !cut && k === list.length - 1 && !p.g.s ? 'Z' : p.g.s ? segPath(p.g.a, p.g.b, p.g.s) : `L${P(e)}`;
     pen = e;
@@ -307,14 +325,26 @@ function wallAt(m, p, tol = 16){
   }
   return best;
 }
-// Slide an opening along its segment so it fits between the corners and any other door or window there.
+// Where other walls cross or end on a straight segment: [{s (distance along it), th}]. A wall ending a stroke-width short still counts.
+function crossings(m, wallId, g){
+  const u = [(g.b[0] - g.a[0]) / g.len, (g.b[1] - g.a[1]) / g.len], out = [];
+  for (const x of wallLines(m)) if (x.id !== wallId) for (let i = 1; i < x.pts.length; i++){
+    const p = x.pts[i - 1], q = x.pts[i], v = [q[0] - p[0], q[1] - p[1]], lv = hyp(v[0], v[1]), den = cross(u, v); if (lv < 1e-9 || Math.abs(den) / lv < 0.05) continue;
+    const ap = [p[0] - g.a[0], p[1] - g.a[1]], s = cross(ap, v) / den, k = cross(ap, u) / den, slack = (x.th / 2 + 1) / lv;
+    if (k >= -slack && k <= 1 + slack && s >= 0 && s <= g.len) out.push({ s, th: x.th });
+  }
+  return out;
+}
+// Slide an opening along its segment so it fits between the corners, any other door or window there, and any wall that
+// meets it (a door straddling a T-junction would open into two rooms at once).
 function doorFit(m, wallId, seg, t, w, skip){
   const W = byId(m, wallId); if (!W || W.k !== 'wall') return { err: 'Point at a wall.' };
   const g = segsOf(W)[seg]; if (!g) return { err: 'Point at a wall.' };
   if (g.s) return { err: 'Doors and windows only go on straight walls. Straighten this wall first.' };
   const e = (W.thin ? THIN : WALL) / 2 + 2, half = w / 2;
   if (w > g.len - 2 * e) return { err: 'This wall is too short for that width.' };
-  const others = m.items.filter(o => isOpening(o) && o.id !== skip && o.wall === wallId && o.seg === seg).map(o => [o.t * g.len - o.w / 2 - 2, o.t * g.len + o.w / 2 + 2]);
+  const others = m.items.filter(o => isOpening(o) && o.id !== skip && o.wall === wallId && o.seg === seg).map(o => [o.t * g.len - o.w / 2 - 2, o.t * g.len + o.w / 2 + 2])
+    .concat(crossings(m, wallId, g).map(x => [x.s - x.th / 2 - 2, x.s + x.th / 2 + 2]));
   const ok = c => c - half >= e - 1e-6 && c + half <= g.len - e + 1e-6 && others.every(([a, b]) => c + half <= a || c - half >= b);
   const want = clamp(t * g.len, e + half, g.len - e - half);
   const cand = [want, ...others.flatMap(([a, b]) => [a - half, b + half])].filter(ok).sort((x, y) => Math.abs(x - want) - Math.abs(y - want));
@@ -323,25 +353,32 @@ function doorFit(m, wallId, seg, t, w, skip){
 // Hinge on the end nearer a crossing wall or corner, so the door folds back against it (what builders do).
 function hingeFor(m, wallId, seg, t, w){
   const W = byId(m, wallId), g = W && segsOf(W)[seg]; if (!g || g.s) return 'a';
-  const c = t * g.len, u = [(g.b[0] - g.a[0]) / g.len, (g.b[1] - g.a[1]) / g.len];
+  const c = t * g.len;
   let dA = c - w / 2, dB = g.len - c - w / 2;
-  for (const x of wallLines(m)) if (x.id !== wallId) for (let i = 1; i < x.pts.length; i++){
-    const p = x.pts[i - 1], q = x.pts[i], den = cross(u, [q[0] - p[0], q[1] - p[1]]); if (Math.abs(den) < 1e-9) continue;
-    const ap = [p[0] - g.a[0], p[1] - g.a[1]], s = cross(ap, [q[0] - p[0], q[1] - p[1]]) / den, k = cross(ap, u) / den;
-    if (k < -0.01 || k > 1.01 || s < 0 || s > g.len) continue;
-    if (s < c) dA = Math.min(dA, c - w / 2 - s); else dB = Math.min(dB, s - c - w / 2);
-  }
+  for (const { s } of crossings(m, wallId, g)) if (s < c) dA = Math.min(dA, c - w / 2 - s); else dB = Math.min(dB, s - c - w / 2);
   return dA <= dB ? 'a' : 'b';
 }
+// Which way a door clicked right on its wall swings (true = the unflipped side): into the room the wall goes round (a room
+// drawn next to another one is an open wall of three sides, so it counts as closed back to its start), else toward the side
+// with more bays, else the pointer's side. Which half of the stroke the pointer is over shouldn't decide it.
+function swingIn(m, W, seg, t, side){
+  const g = segsOf(W)[seg], u = [(g.b[0] - g.a[0]) / g.len, (g.b[1] - g.a[1]) / g.len], c = [g.a[0] + u[0] * t * g.len, g.a[1] + u[1] * t * g.len], pl = polyOf(W);
+  const area = Math.abs(pl.reduce((s, p, i) => s + cross(p, pl[(i + 1) % pl.length]), 0)) / 2;
+  if (W.pts.length > 2 && area > 64 * 64) return inPoly([c[0] - u[1] * 6, c[1] + u[0] * 6], pl);
+  let k = 0; for (const b of m.items) if (b.k === 'bay' && dist([b.x, b.y], c) < 480) k += Math.sign(cross(u, [b.x - c[0], b.y - c[1]]));
+  return k ? k > 0 : side >= 0;
+}
 // A door (or window) for the wall under p, or {err} in plain words. Not added: call add(m, item).
+// The pointer picks the swing side only when it is clearly off the wall's stroke.
 function newDoor(m, p, o = {}){
   const k = o.k === 'window' ? 'window' : 'door', hit = wallAt(m, p, o.tol ?? 16);
   if (!hit) return { err: `Point at a wall to place the ${k}.` };
   if (hit.curved) return { err: 'Doors and windows only go on straight walls. Straighten this wall first.' };
   const w = o.w ?? (k === 'door' ? 3 * UNIT : 4 * UNIT), fit = doorFit(m, hit.wall, hit.seg, hit.t, w, o.skip);
   if (fit.err) return fit;
-  const it = { id: '', k, wall: hit.wall, seg: hit.seg, t: fit.t, w };
-  if (k === 'door') Object.assign(it, { type: o.type || 'swing', flip: hit.side < 0, hinge: hingeFor(m, hit.wall, hit.seg, fit.t, w) });
+  const it = { id: '', k, wall: hit.wall, seg: hit.seg, t: fit.t, w }, W = byId(m, hit.wall);
+  if (k === 'door') Object.assign(it, { type: o.type || 'swing', flip: hit.d > (W.thin ? THIN : WALL) / 2 + 4 ? hit.side < 0 : !swingIn(m, W, hit.seg, fit.t, hit.side),
+    hinge: hingeFor(m, hit.wall, hit.seg, fit.t, w) });
   return { item: it };
 }
 
@@ -388,58 +425,98 @@ function room(S, p, rr, bayId){
 
 // ---------- bays ----------
 // Chair, side table and lantern for a bay. Chair sits toward the back of the rug, its back toward a; the table goes beside it
-// on the side with more room when side is auto (sliding a little forward or back if both sides are tight).
+// on the side with more room when side is auto (sliding a little forward or back if both sides are tight). When nothing fits,
+// a smaller table tucked in against the chair is tried, so bays 9 ft apart keep their tables off the curtain between them.
 function bayParts(S, b){
   const a = +b.a || 0, bk = back(a), pr = pright(a);
   const ch = b.chair ? [b.x + b.chair[0], b.y + b.chair[1]] : [b.x + bk[0] * 0.55 * b.r, b.y + bk[1] * 0.55 * b.r];
   let table = null, lamp = null;
   if (b.table){ const [dx, dy, tr] = b.table; lamp = [b.x + dx, b.y + dy]; if (tr > 0) table = { c: [lamp[0], lamp[1], tr] }; }
   else if (b.side !== 'none'){
-    const tr = clamp(Math.round(b.r * 0.4), 22, 26), off = CW / 2 + tr + 5;
-    const at = (k, al) => [ch[0] + pr[0] * off * k - bk[0] * al, ch[1] + pr[1] * off * k - bk[1] * al];
     const ks = b.side === 'left' ? [-1] : b.side === 'right' ? [1] : [1, -1];
-    let best = null;
-    for (const k of ks) for (const al of [6, 18, -6]){ const p = at(k, al), sc = Math.min(room(S, p, tr, b.id), 24) - (al === 6 ? 0 : 3);
-      if (!best || sc > best.sc + 0.5) best = { p, sc }; }
-    table = { c: [best.p[0], best.p[1], tr] }; lamp = best.p;
+    const pick = (tr, gap) => { const off = CW / 2 + tr + gap; let best = null;
+      for (const k of ks) for (const al of [6, 18, -6]){ const p = [ch[0] + pr[0] * off * k - bk[0] * al, ch[1] + pr[1] * off * k - bk[1] * al], sc = Math.min(room(S, p, tr, b.id), 24) - (al === 6 ? 0 : 3);
+        if (!best || sc > best.sc + 0.5) best = { p, sc, tr }; }
+      return best; };
+    let best = pick(clamp(Math.round(b.r * 0.4), 22, 26), 5);
+    if (best.sc < 0){ const t = pick(18, 2); if (t.sc > best.sc) best = t; }
+    table = { c: [best.p[0], best.p[1], best.tr] }; lamp = best.p;
   }
   return { chair: [ch[0], ch[1], a], table, lamp };
 }
 const chairShape = c => rrect(c[0], c[1], CW, CH, c[2]);
-// The angle that turns a chair's back to the nearest wall, snapped to 15° (so the patient faces into the room).
-function faceWall(m, x, y, S = null){
-  const W = (S || scene(m)).walls; let best = null;
-  for (const w of W) for (let i = 1; i < w.pts.length; i++){ const r = segNear([x, y], w.pts[i - 1], w.pts[i]); if (!best || r.d < best.d) best = r; }
-  if (!best || best.d < 1e-6) return 0;
-  return normA(Math.round(deg(Math.atan2(best.q[0] - x, -(best.q[1] - y))) / 15) * 15);
+// Share of a chair [x, y, a] inside box b, sampled on a 6 × 6 grid.
+function chairCover(b, c){
+  let n = 0; for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) if (inBox(rot([c[0] + ((i + .5) / 6 - .5) * CW, c[1] + ((j + .5) / 6 - .5) * CH], [c[0], c[1]], c[2]), b)) n++;
+  return n / 36;
 }
-// Keep a rug (and the chair at its back) clear of walls: push the centre out of any wall closer than the rug needs.
-// Door swings are kept clear too, so a bay dropped by a door doesn't block it.
+// How far a rug's centre must sit from the wall behind its chair (the chair's depth) and from any other wall.
+const backGap = r => Math.max(r + 6, 0.55 * r + CH / 2 + 10), sideGap = r => r + 6;
+// The angle that turns a chair's back to a wall, snapped to 15° (so the patient faces into the room). Every wall within half a
+// rug of the nearest counts, so a few units don't decide it: one the chair already clears wins, then the one the nearest bay
+// backs onto (a row stays in line, end bays too), then the one about a chair's depth away, on a longer wall. o = {r, skip (this bay's id)}.
+function faceWall(m, x, y, S = null, o = {}){
+  const W = (S || scene(m)).walls, r = o.r || SIZES.M, ang = q => normA(Math.round(deg(Math.atan2(q[0] - x, -(q[1] - y))) / 15) * 15), all = [];
+  for (const w of W) for (let i = 1; i < w.pts.length; i++){ const s = segNear([x, y], w.pts[i - 1], w.pts[i]); all.push({ d: s.d, q: s.q, th: w.th, len: dist(w.pts[i - 1], w.pts[i]) }); }
+  if (!all.length) return 0;
+  const d0 = Math.min(...all.map(c => c.d)); if (d0 < 1e-6) return 0;
+  const by = new Map();
+  for (const c of all) if (c.d <= d0 + 0.5 * r){ const a = ang(c.q), was = by.get(a); if (!was || c.len > was.len) by.set(a, { ...c, a, d: Math.min(c.d, was ? was.d : Infinity) }); }
+  let C = [...by.values()];
+  if (C.length > 1){ const ok = C.filter(c => c.d >= backGap(r) + c.th / 2 - 6); if (ok.length) C = ok; }
+  if (C.length > 1){
+    const nb = m.items.filter(b => b.k === 'bay' && b.id !== o.skip && dist([b.x, b.y], [x, y]) < 5 * r).sort((p, q) => dist([p.x, p.y], [x, y]) - dist([q.x, q.y], [x, y]))[0];
+    const same = nb && C.find(c => c.a === normA(Math.round((nb.a || 0) / 15) * 15)); if (same) return same.a;
+  }
+  const score = c => Math.abs(c.d - backGap(r)) - 0.02 * Math.min(c.len, 1000);   // about a chair's depth away, on a long wall
+  return C.sort((p, q) => score(p) - score(q))[0].a;
+}
+// Keep a rug (and the chair at its back) clear of walls: push the centre out of any wall closer than the rug needs. Only the
+// wall behind the chair needs the chair's depth. Door swings are kept clear too, so a bay dropped by a door doesn't block it.
+// The push never takes a rug into another one: it stops where they would touch.
 function nudgeBay(m, b, S = null){
   S = S || scene(m);
-  const need = Math.max(b.r + 6, 0.55 * b.r + CH / 2 + 10);
+  const bk = back(+b.a || 0), p0 = [b.x, b.y];
   let p = [b.x, b.y];
   for (let k = 0; k < 8; k++){
     let moved = false;
-    for (const w of S.walls) for (let i = 1; i < w.pts.length; i++){ const r = segNear(p, w.pts[i - 1], w.pts[i]), want = need + w.th / 2 - 4;
-      if (r.d < want && r.d > 1e-6){ p = [r.q[0] + (p[0] - r.q[0]) / r.d * want, r.q[1] + (p[1] - r.q[1]) / r.d * want]; moved = true; } }
+    for (const w of S.walls) for (let i = 1; i < w.pts.length; i++){ const r = segNear(p, w.pts[i - 1], w.pts[i]); if (r.d <= 1e-6) continue;
+      const behind = ((r.q[0] - p[0]) * bk[0] + (r.q[1] - p[1]) * bk[1]) / r.d >= Math.SQRT1_2, want = (behind ? backGap(b.r) : sideGap(b.r)) + w.th / 2 - 4;
+      if (r.d < want){ p = [r.q[0] + (p[0] - r.q[0]) / r.d * want, r.q[1] + (p[1] - r.q[1]) / r.d * want]; moved = true; } }
     for (const d of S.doors){ const z = d.box, q = [clamp(p[0], z.x0, z.x1), clamp(p[1], z.y0, z.y1)], dd = dist(p, q), want = b.r + 8;
       if (dd >= want) continue;
       const v = dd > 1e-6 ? [(p[0] - q[0]) / dd, (p[1] - q[1]) / dd] : (() => { const c = [(z.x0 + z.x1) / 2, (z.y0 + z.y1) / 2], L = dist(p, c) || 1; return [(p[0] - c[0]) / L, (p[1] - c[1]) / L]; })();
       p = [q[0] + v[0] * want, q[1] + v[1] * want]; moved = true; }
     if (!moved) break;
   }
+  const gap = q => Math.min(Infinity, ...S.rugs.filter(o => o.id !== b.id).map(o => dist(q, [o.x, o.y]) - o.r - b.r)), at = t => [p0[0] + (p[0] - p0[0]) * t, p0[1] + (p[1] - p0[1]) * t];
+  const g0 = gap(p0);
+  if (gap(p) < Math.min(0, g0)){ let t = 1; while (t > 0 && gap(at(t)) < Math.min(0, g0)) t = Math.max(0, t - 0.05); p = at(t); }
   b.x = rnd(p[0]); b.y = rnd(p[1]); return b;
 }
-// A complete bay at (x, y): next free number, medium rug, nudged off the walls, back to the nearest wall. Not added: call add(m, bay).
+// A complete bay at (x, y): next free number, medium rug, its back turned to a wall, then nudged off the walls. Turning first
+// means only the wall behind the chair pushes it out by the chair's depth. Not added: call add(m, bay).
 function newBay(m, x, y, o = {}){
   const S = scene(m), b = { id: '', k: 'bay', no: o.no || nextBayNo(m), x, y, r: o.r || SIZES.M, a: 0, side: 'auto', tag: null, chair: null, table: null };
-  nudgeBay(m, b, S); b.a = o.a ?? faceWall(m, b.x, b.y, S); return b;
+  b.a = o.a ?? faceWall(m, x, y, S, { r: b.r }); nudgeBay(m, b, S); return b;
 }
 
 // ---------- tags ----------
-// The tracker's bay tag is HTML sized in container units: about 0.19 × 0.06 of the map width.
-const tagSize = w => [0.19 * w, 0.06 * w];
+// The tracker's bay tag in px when the map is drawn D px wide, worked out from ESK's .btag CSS: fonts and padding grow with the
+// map but stop at fixed px sizes. Text is a typical tag ("4 Patient B" over "Vitals due 10:20"). At 560 px or less the tag is
+// one line (dot, then the name, cut off at 19% of the map). Checked against tags measured in Edge: about 127 × 48 px at
+// 900 px wide, 57 × 17 px in the side pane.
+function tagPx(D){
+  const n = clamp(0.02 * D, 10, 14), s = clamp(0.0175 * D, 9, 12.5), py = clamp(0.008 * D, 2, 7), px = clamp(0.014 * D, 5, 11), name = 10.4 * 0.52 * n;
+  if (D <= 560) return [Math.min(0.19 * D, 11 + name + 2 * px), 1.2 * n + 2 * py];
+  return [Math.min(0.28 * D, Math.max(name, 16 * 0.465 * s + 12) + 2 * px), 1.2 * n + 2 + 1.2 * s + 2 * py];
+}
+// The map widths the builder plans for. Tags are placed and checked at 760 px (ESK Bays, and a narrow full-screen map); wider
+// maps draw them smaller for the map, so they can't collide there. The Excel side pane (300 px) is checked too, and PANE_W is
+// how much its size counts when placing tags: some, so tags stagger there, but less than the main view.
+const TAG_D = 760, PANE_D = 300, PANE_W = 0.2;
+// Tag size in drawing units for a map w units wide drawn D px wide.
+const tagSize = (w, D = TAG_D) => tagPx(D).map(v => v * w / D);
 // Centre distance along unit u at which a hw × hh half-size box is gap away from a circle of radius r (gap < 0 = overlaps).
 function boxOut(u, r, hw, hh, gap){
   const want = r + gap, near = d => hyp(Math.max(Math.abs(u[0] * d) - hw, 0), Math.max(Math.abs(u[1] * d) - hh, 0));
@@ -449,12 +526,15 @@ function boxOut(u, r, hw, hh, gap){
 }
 // How bad a tag spot is: off the map, across walls, over other tags, rugs, lanterns, chairs, tables, doors and room names;
 // then a mild pull toward the front of the chair and a slight overlap of the rug edge, like the ESK drawing.
-// The part that depends on other tags is redone each time; the rest is worked out once per spot.
+// The part that depends on other tags is redone each time (it runs most, so it does plain sums); the rest once per spot.
+// Two same-size boxes dx, dy apart overlap by (w − dx)(h − dy).
 function tagCost(X, i, c){
   if (c.sc == null) c.sc = tagStatic(X, i, c);
-  const { B, tw, th } = X, b = cbox(c.x, c.y, tw, th), area = tw * th; let k = c.sc;
+  const { tw, th, pw, ph } = X, mw = Math.max(tw, pw), mh = Math.max(th, ph); let k = c.sc;
   for (const j of X.near[i].bays){ const t = X.tags[j]; if (j === i || !t) continue;
-    const f = interArea(b, cbox(t[0], t[1], tw, th)) / area; if (f > 0) k += 400 + 800 * f; }
+    const dx = Math.abs(c.x - t[0]), dy = Math.abs(c.y - t[1]); if (dx >= mw || dy >= mh) continue;
+    if (dx < tw && dy < th) k += 400 + 800 * (tw - dx) * (th - dy) / (tw * th);
+    if (dx < pw && dy < ph){ const fp = (pw - dx) * (ph - dy) / (pw * ph); if (fp > 0.04) k += PANE_W * (400 + 800 * fp); } }
   return k;
 }
 function tagStatic(X, i, c){
@@ -471,15 +551,24 @@ function tagStatic(X, i, c){
       const fc = cover(b, chairShape(o.p.chair)); if (fc > 0) k += 100 + 300 * fc;
       if (o.p.table){ const ft = cover(b, { t: 'c', x: o.p.table.c[0], y: o.p.table.c[1], r: o.p.table.c[2] }); if (ft > 0) k += 60 + 200 * ft; }
     } else {
-      k += 80 * cover(b, chairShape(o.p.chair));
+      k += 80 * cover(b, chairShape(o.p.chair)); const oc = chairCover(b, o.p.chair); if (oc > 0.08) k += 150 + 300 * oc;   // its own chair hidden
       if (o.p.table) k += 60 * cover(b, { t: 'c', x: o.p.table.c[0], y: o.p.table.c[1], r: o.p.table.c[2] });
     }
     if (o.p.lamp && boxDist(o.p.lamp, b) < 9) k += j === i ? 300 : 400;
   }
   for (const f of S.furn){ const v = cover(b, f.s); if (v > 0) k += 60 + 200 * v; }
+  // The same tag drawn in the Excel side pane is larger for the map: keep that clear of walls and other rugs too, when it costs little.
+  const bp = cbox(c.x, c.y, X.pw, X.ph);
+  for (const w of S.walls) if (polyBox(w.pts, inflate(bp, w.th / 2))){ k += PANE_W * 1000; break; }
+  for (const j of S.bays) if (j !== i){ const o = B[j], f = cover(bp, { t: 'c', x: o.b.x, y: o.b.y, r: o.b.r }); if (f > 0.05) k += PANE_W * (150 + 400 * f); }
   for (const d of S.doors){ const v = interArea(b, d.box) / area; if (v > 0) k += 100 + 250 * v; }
   for (const l of S.labels){ const v = interArea(b, l.box) / area; if (v > 0) k += 150 + 300 * v; }
-  for (const x of S.curts) if (polyBox(x.pts, b)) k += 12;
+  // A curtain between the rug and its tag makes the tag read as the next bay's; one splitting the tag down the middle nearly as much.
+  for (const x of S.curts){
+    if (polyBox(x.pts, b)){ k += 12; let n = 0; for (let ii = 0; ii < 6; ii++) for (let jj = 0; jj < 3; jj++) if (sideOf([b.x0 + (ii + .5) * tw / 6, b.y0 + (jj + .5) * th / 3], x.pts) > 0) n++;
+      if (Math.min(n, 18 - n) > 4.5) k += 40; }
+    for (let j = 1; j < x.pts.length; j++) if (segX([me.b.x, me.b.y], [c.x, c.y], x.pts[j - 1], x.pts[j])){ k += 300; break; }
+  }
   const fr = back(me.b.a || 0), da = Math.abs(normA(deg(Math.atan2(c.u[1], c.u[0])) - deg(Math.atan2(-fr[1], -fr[0]))));
   return k + da * 0.12 + Math.abs(c.o - 0.3 * th) * 0.35 + (c.u[1] < -0.2 ? 2 : 0);
 }
@@ -493,7 +582,7 @@ function tagSpots(b, tw, th){
 
 // What a tag around bay b could touch: walls, doors, furniture, labels, curtains and bays within reach (keeps big maps quick).
 function nearOf(X, b){
-  const { S, B, tw, th } = X, reach = b.r + tw + th + 8, z = cbox(b.x, b.y, 2 * reach, 2 * reach);
+  const { S, B } = X, tw = Math.max(X.tw, X.pw), th = Math.max(X.th, X.ph), reach = b.r + tw + th + 8, z = cbox(b.x, b.y, 2 * reach, 2 * reach);
   return { walls: S.walls.filter(w => boxHit(z, inflate(bbox(w.pts), w.th))), curts: S.curts.filter(x => boxHit(z, bbox(x.pts))),
     doors: S.doors.filter(d => boxHit(z, d.box)), labels: S.labels.filter(l => boxHit(z, l.box)), furn: S.furn.filter(f => boxHit(z, shapeBox(f.s))),
     bays: B.map((o, j) => j).filter(j => dist([B[j].b.x, B[j].b.y], [b.x, b.y]) < reach + B[j].b.r + tw + th + CH) };
@@ -547,9 +636,15 @@ const memo = [];
 function layout(m){
   const key = JSON.stringify(m), got = memo.find(x => x.key === key); if (got) return got.val;
   const S = scene(m), bays = m.items.filter(i => i.k === 'bay');
-  const B = bays.map(b => ({ b, p: bayParts(S, b) }));
+  // Bays are fitted one at a time (pinned tables first), each seeing the chairs and tables already placed, so two neighbours
+  // don't both put their table in the gap between them.
+  const F = { ...S, furn: [...S.furn] }, B = bays.map(b => ({ b, p: null }));
+  for (const i of bays.map((b, i) => i).sort((i, j) => (bays[j].table ? 1 : 0) - (bays[i].table ? 1 : 0) || i - j)){
+    const p = B[i].p = bayParts(F, bays[i]);
+    F.furn.push({ id: bays[i].id, s: chairShape(p.chair) }); if (p.table) F.furn.push({ id: bays[i].id, s: { t: 'c', x: p.table.c[0], y: p.table.c[1], r: p.table.c[2] } });
+  }
   const bb = contentBox(m, S, B), box = { x0: bb.x0 - PAD, y0: bb.y0 - PAD, x1: bb.x1 + PAD, y1: bb.y1 + PAD };
-  const [tw, th] = tagSize(box.x1 - box.x0), X = { S, B, box, tw, th, tags: B.map(o => o.b.tag ? [...o.b.tag] : null) };
+  const [tw, th] = tagSize(box.x1 - box.x0), [pw, ph] = tagSize(box.x1 - box.x0, PANE_D), X = { S, B, box, tw, th, pw, ph, tags: B.map(o => o.b.tag ? [...o.b.tag] : null) };
   placeTags(X);
   for (const t of X.tags) if (t) join(box, inflate(cbox(t[0], t[1], tw, th), 4));
   const out = { box: { x: box.x0, y: box.y0, w: box.x1 - box.x0, h: box.y1 - box.y0 }, tag: [tw, th], bays: new Map(), curtains: new Map() };
@@ -574,10 +669,25 @@ function autoBay(m, bay){
   const id = bay.id || '__new', b = { ...bay, id };
   return layout({ ...m, items: byId(m, id) ? m.items.map(i => i.id === id ? b : i) : [...m.items, b] }).bays.get(id);
 }
-// Bays a curtain screens: any rug that comes within 0.6 r of its track, on either side.
+// The nearest bay on each side of a track (within 2.2 r, and alongside it rather than past its ends): {1: bay, -1: bay}.
+function besideOf(m, pl){
+  const out = {}, D = {}; let W = null;
+  for (const b of m.items) if (b.k === 'bay'){
+    let best = null; for (let i = 1; i < pl.length; i++){ const r = segNear([b.x, b.y], pl[i - 1], pl[i]); if (!best || r.d < best.d) best = { ...r, i }; }
+    if (!best || best.d > 2.2 * b.r || (best.i === 1 && best.t <= 0) || (best.i === pl.length - 1 && best.t >= 1)) continue;
+    const q = [best.q[0] + (b.x - best.q[0]) * 2 / (best.d || 1), best.q[1] + (b.y - best.q[1]) * 2 / (best.d || 1)];
+    if ((W = W || wallLines(m)).some(w => w.pts.some((p, k) => k > 0 && segX([b.x, b.y], q, w.pts[k - 1], p)))) continue;   // not through a wall
+    const s = sideOf([b.x, b.y], pl); if (!out[s] || best.d < D[s]){ out[s] = b; D[s] = best.d; }
+  }
+  return out;
+}
+// Bays a curtain screens: any rug that comes within 0.6 r of its track, and the nearest bay on each side of it, so a curtain
+// drawn between two neighbours screens both even when it isn't quite in the middle.
 function autoCurtainBays(m, c, S = null){
-  const L = c.k === 'path' ? flattenPath(c.d) : [polyOf(c)];
-  return m.items.filter(b => b.k === 'bay' && L.some(pl => distPoly([b.x, b.y], pl) <= 1.6 * b.r)).map(b => b.id);
+  const L = c.k === 'path' ? flattenPath(c.d) : [polyOf(c)], ids = new Set();
+  for (const pl of L){ for (const b of m.items) if (b.k === 'bay' && distPoly([b.x, b.y], pl) <= 1.6 * b.r) ids.add(b.id);
+    if (pl.length > 1){ const s = besideOf(m, pl); for (const k of [1, -1]) if (s[k]) ids.add(s[k].id); } }
+  return m.items.filter(b => b.k === 'bay' && ids.has(b.id)).map(b => b.id);
 }
 
 // ---------- snapping ----------
@@ -658,12 +768,30 @@ function newRoom(m, x0, y0, x1, y1, name){
   }
   if (!lines.length) return null;
   const walls = lines.map(pts => add(m, { id: '', k: 'wall', pts: pts.map(p => [p[0], p[1]]), bend: pts.map(() => 0), closed: whole, thin: false }));
-  const label = add(m, { id: '', k: 'label', t: name || `Room ${n}`, x: cx, y: roomy ? ay - 24 : ay + 24, small: false });
+  // The name goes above the room; when another room is there it goes inside, in the middle of a shallow room such as a hallway.
+  const label = add(m, { id: '', k: 'label', t: name || `Room ${n}`, x: cx, y: roomy ? ay - 24 : by - ay < 8 * UNIT ? (ay + by) / 2 : ay + 24, small: false });
   return [walls[0], label, ...walls.slice(1)];
 }
-// A wall or curtain from points (straight segments). Not added.
-const newLine = (k, pts, closed = false) => k === 'curtain' ? { id: '', k, pts: clone(pts), bend: pts.map(() => 0), bays: null, rev: false }
-  : { id: '', k: 'wall', pts: clone(pts), bend: pts.map(() => 0), closed: !!closed && pts.length > 2, thin: false };
+// Slide any room name a new door swings over to the nearest clear spot (along the room first), so it stays readable.
+function clearLabels(m, door){
+  const d = doorD(m, door) || windowD(m, door); if (!d) return;
+  const z = inflate(bbox(flattenPath(d).flat()), 2), S = scene(m), cand = [];
+  for (let k = 1; k <= 20; k++) cand.push([k * 8, 0], [-k * 8, 0]);
+  for (let k = 1; k <= 3; k++) cand.push([0, k * 8], [0, -k * 8]);
+  cand.sort((a, b) => hyp(a[0], a[1]) - hyp(b[0], b[1]));
+  for (const l of m.items) if (l.k === 'label' && boxHit(labelBox(l), z)){
+    const free = (x, y) => { const b = labelBox({ ...l, x, y });
+      return !S.doors.some(o => boxHit(b, o.box)) && !S.walls.some(w => polyBox(w.pts, inflate(b, w.th / 2 + 2))) && !S.labels.some(o => o.id !== l.id && boxHit(b, o.box)); };
+    const f = cand.find(([dx, dy]) => free(l.x + dx, l.y + dy)); if (f){ l.x += f[0]; l.y += f[1]; }
+  }
+}
+// A wall or curtain from points (straight segments). Not added. Given the model, a curtain drawn from its open end toward a
+// wall is turned round (rev), so it still bunches against the wall.
+function newLine(k, pts, closed = false, m = null){
+  if (k !== 'curtain') return { id: '', k: 'wall', pts: clone(pts), bend: pts.map(() => 0), closed: !!closed && pts.length > 2, thin: false };
+  const on = p => !!m && wallLines(m).some(w => distPoly(p, w.pts) <= w.th / 2 + 2);
+  return { id: '', k, pts: clone(pts), bend: pts.map(() => 0), bays: null, rev: pts.length > 1 && !on(pts[0]) && on(pts[pts.length - 1]) };
+}
 // Push a counter, sink, cabinet or desk flat against the wall it was dropped near.
 function hugWall(m, it){
   const S = scene(m); let best = null;
@@ -720,7 +848,8 @@ function remove(m, ids){
   const gone = new Set(ids);
   for (const it of m.items) if (isOpening(it) && gone.has(it.wall)) gone.add(it.id);
   m.items = m.items.filter(it => !gone.has(it.id));
-  for (const c of m.items) if (c.bays) c.bays = c.bays.filter(id => !gone.has(id));
+  // A hand-picked curtain list that loses its last bay goes back to automatic rather than screening nothing.
+  for (const c of m.items) if (c.bays){ const b = c.bays.filter(id => !gone.has(id)); if (b.length < c.bays.length) c.bays = b.length ? b : null; }
   return m;
 }
 // Paste copies of items, offset by dx, dy. Returns the new ids. Bays get fresh numbers if theirs are taken; doors come along
@@ -729,8 +858,8 @@ function paste(m, items, dx = 16, dy = 16){
   const map = new Map(), out = [], src = clone(items).filter(it => !isOpening(it) || items.some(w => w.id === it.wall));
   for (const it of src.filter(i => !isOpening(i))){ const old = it.id; it.id = '';
     if (it.k === 'bay'){ const no = String(it.no ?? '').trim().toLowerCase(); if (!no || m.items.some(b => b.k === 'bay' && String(b.no).trim().toLowerCase() === no)) it.no = nextBayNo(m); }
-    shift(it, dx, dy); add(m, it); map.set(old, it.id); out.push(it.id); }
-  for (const it of src.filter(isOpening)){ it.id = ''; it.wall = map.get(it.wall); add(m, it); out.push(it.id); }
+    shift(it, dx, dy); add(m, it, false); map.set(old, it.id); out.push(it.id); }
+  for (const it of src.filter(isOpening)){ it.id = ''; it.wall = map.get(it.wall); add(m, it, false); out.push(it.id); }
   for (const id of out){ const c = byId(m, id); if (c.bays){ const b = c.bays.map(x => map.get(x)).filter(Boolean); c.bays = b.length ? b : null; } }
   return out;
 }
@@ -775,8 +904,16 @@ function removeVertex(m, id, i){
   if (w.k === 'wall') reattach(m, w, before);
   return m;
 }
-// Move one corner; doors keep their place along the segment (as a share of its length).
-function moveVertex(m, id, i, p){ const w = byId(m, id); if (w && w.pts && w.pts[i]) w.pts[i] = [p[0], p[1]]; return m; }
+// Move one corner. Doors on the two segments that meet there keep their share of the segment's length, then slide back
+// inside it if it got shorter (a door that still can't fit is left for the checklist to flag).
+function moveVertex(m, id, i, p){
+  const w = byId(m, id); if (!w || !w.pts || !w.pts[i]) return m;
+  w.pts[i] = [p[0], p[1]];
+  if (w.k !== 'wall') return m;
+  const n = segsOf(w).length, segs = new Set([i - 1, i].map(s => w.closed && w.pts.length > 2 ? (s + n) % n : s).filter(s => s >= 0 && s < n));
+  for (const o of m.items) if (isOpening(o) && o.wall === w.id && segs.has(o.seg)){ const f = doorFit(m, w.id, o.seg, o.t, o.w, o.id); if (f.ok) o.t = f.t; }
+  return m;
+}
 
 // ---------- hit testing ----------
 // Which segment of a wall or curtain is nearest p (curves included): {seg, d, q} or null. The page uses it to add corners.
@@ -850,12 +987,13 @@ function planOf(m, L = layout(m)){
 }
 const rect = (x, y, w, h, rx, a) => { const o = { rect: [rnd(x - w / 2), rnd(y - h / 2), rnd(w), rnd(h), rnd(rx)] }; if (a && rnd(normA(a))) o.a = rnd(normA(a)); return o; };
 // The file the tracker reads: cropped to the drawing plus padding (moved so the box starts at 0,0), rounded, stamped, with the
-// edit model (moved the same way) so the map reopens exactly. o = {savedAt, savedBy}.
+// edit model (moved the same way) so the map reopens exactly. The crop moves by whole grid steps, so a reopened map's walls
+// stay on the grid that new things snap to. o = {savedAt, savedBy}.
 function exportPlan(model, o = {}){
-  const m = cleanModel(model) || clone(model), L = layout(m);
-  let x0 = Math.floor(L.box.x), y0 = Math.floor(L.box.y), W = Math.ceil(L.box.x + L.box.w) - x0, H = Math.ceil(L.box.y + L.box.h) - y0;
-  if (W < 100){ x0 -= Math.floor((100 - W) / 2); W = 100; }
-  if (H < 60){ y0 -= Math.floor((60 - H) / 2); H = 60; }
+  const m = cleanModel(model) || clone(model), L = layout(m), g = m.grid || GRID;
+  let x0 = Math.floor(L.box.x / g) * g, y0 = Math.floor(L.box.y / g) * g, W = Math.ceil(L.box.x + L.box.w) - x0, H = Math.ceil(L.box.y + L.box.h) - y0;
+  if (W < 100){ const s = Math.ceil((100 - W) / 2 / g) * g; x0 -= s; W = Math.max(100, W + s); }
+  if (H < 60){ const s = Math.ceil((60 - H) / 2 / g) * g; y0 -= s; H = Math.max(60, H + s); }
   const mt = moveModel(m, -x0, -y0), Lt = { box: { x: 0, y: 0, w: W, h: H }, tag: L.tag, curtains: L.curtains, bays: new Map() };
   const sp = p => p && [p[0] - x0, p[1] - y0];
   for (const [id, x] of L.bays) Lt.bays.set(id, { chair: [x.chair[0] - x0, x.chair[1] - y0, x.chair[2]], table: x.table && { c: [x.table.c[0] - x0, x.table.c[1] - y0, x.table.c[2]] }, lamp: sp(x.lamp), tag: sp(x.tag) });
@@ -910,10 +1048,25 @@ function check(m){
   const ops = m.items.filter(o => isOpening(o) && !openingSeg(m, o).err);
   for (let i = 0; i < ops.length; i++) for (let j = i + 1; j < ops.length; j++){ const a = ops[i], b = ops[j];
     if (a.wall === b.wall && a.seg === b.seg){ const L = openingSeg(m, a).g.len; if (Math.abs(a.t - b.t) * L < (a.w + b.w) / 2) put('warn', 'Two doors or windows overlap on the same wall. Slide one along the wall.', [a.id, b.id]); } }
+  // A door gap or swing that meets any other wall (one that ends in the doorway, or a curved neighbour the leaf passes through).
+  const segLines = pl => pl.slice(1).map((p, i) => [pl[i], p]);
+  for (const o of ops){
+    const G = openingGeo(m, o), W = byId(m, o.wall), mine = [[G.g0, G.g1], ...(o.k === 'door' ? flattenPath(doorD(m, o)).flatMap(segLines) : [])];
+    const other = [...S.walls.filter(w => w.id !== o.wall).flatMap(w => segLines(w.pts)), ...segsOf(W).filter(g => g.i !== o.seg).flatMap(g => segLines(segPts(g)))];
+    if (mine.some(([p, q]) => other.some(([r, s]) => segX(p, q, r, s))))
+      put('warn', o.k === 'door' ? 'This door runs into a wall. Swing it the other way (F) or slide it along the wall.' : 'This window runs into another wall. Slide it along the wall.', [o.id]);
+  }
+  for (const l of S.labels){ const d = S.doors.find(d => interArea(inflate(d.box, -2), l.box) > 0);
+    if (d) put('warn', `The name “${String(byId(m, l.id).t).trim()}” is under a door. Drag it clear of the door.`, [l.id, d.id]); }
   const L = layout(m), [tw, th] = L.tag, tb = b => { const t = L.bays.get(b.id).tag; return cbox(t[0], t[1], tw, th); };
   for (let i = 0; i < bays.length; i++) for (let j = i + 1; j < bays.length; j++){ const a = bays[i], b = bays[j];
-    if (dist([a.x, a.y], [b.x, b.y]) < a.r + b.r - 2) put('warn', `${Name(a)} and ${name(b)} overlap. Move them apart or pick a smaller rug.`, [a.id, b.id]); }
+    if (dist([a.x, a.y], [b.x, b.y]) < a.r + b.r - 2) put('warn', `${Name(a)} and ${name(b)} overlap. Move them apart or pick a smaller rug.`, [a.id, b.id]);
+    const xa = L.bays.get(a.id), xb = L.bays.get(b.id);
+    if (xa.table && xb.table && dist(xa.table.c, xb.table.c) < xa.table.c[2] + xb.table.c[2] - 1) put('warn', `${Name(a)}’s side table runs into ${name(b)}’s. Put one table on the other side.`, [a.id, b.id]);
+    else for (const [p, q, xp, xq] of [[a, b, xa, xb], [b, a, xb, xa]]) if (xp.table && shapeDist(chairShape(xq.chair), xp.table.c) < xp.table.c[2] - 1){
+      put('warn', `${Name(p)}’s side table runs into ${name(q)}’s chair. Put the table on the other side, or move the bays apart.`, [p.id, q.id]); break; } }
   for (const b of bays){ const x = L.bays.get(b.id);
+    if (x.table && S.curts.some(c => distPoly(x.table.c, c.pts) < x.table.c[2] - 1)) put('warn', `${Name(b)}’s side table sits on a curtain. Set its side table to None, or move the curtain.`, [b.id]);
     if (S.walls.some(w => distPoly([b.x, b.y], w.pts) < b.r + w.th / 2 - 1)) put('warn', `${Name(b)} sits on a wall. Drag it into the room.`, [b.id]);
     else if (S.walls.some(w => w.pts.some((p, k) => k > 0 && segShape(w.pts[k - 1], p, chairShape(x.chair), w.th / 2)))) put('warn', `${Name(b)}’s chair goes through a wall. Turn the chair or move the bay away from the wall.`, [b.id]);
     if (x.table && S.walls.some(w => distPoly(x.table.c, w.pts) < x.table.c[2] + w.th / 2 - 1)) put('warn', `${Name(b)}’s side table goes through a wall. Put the table on the other side.`, [b.id]);
@@ -921,18 +1074,38 @@ function check(m){
     if (swing) put('warn', `${Name(b)} is in the way of a door. Move the bay, or swing the door the other way (F).`, [b.id, swing.id]);
     if (b.r < 44) put('warn', `${Name(b)}’s rug is smaller than the recliner. Use size M or larger.`, [b.id]);
     else if (b.r > 100) put('tip', `${Name(b)}’s rug is very large. Size L is usually enough.`, [b.id]); }
-  const crowd = [];
-  for (let i = 0; i < bays.length; i++){ const a = bays[i], A = tb(a);
-    for (let j = 0; j < bays.length; j++){ if (j === i) continue; const b = bays[j];
-      if (j > i && interArea(A, tb(b)) > 0.04 * tw * th) crowd.push(['warn', `The labels for ${name(a)} and ${name(b)} overlap. Drag one, or choose Reset to automatic.`, [a.id, b.id]]);
-      const t = L.bays.get(a.id).tag, rug = { t: 'c', x: b.x, y: b.y, r: b.r }; let n = 0;
-      for (let k = 0; k < 24; k++){ const q = [b.x + Math.cos(k * Math.PI / 12) * b.r * 0.8, b.y + Math.sin(k * Math.PI / 12) * b.r * 0.8]; if (inBox(q, A)) n++; }
-      if (n >= 3 && cover(A, rug) > 0.05) crowd.push(['warn', `${Name(a)}’s label covers ${name(b)}. Drag the label, or choose Reset to automatic.`, [a.id, b.id]]); }
-    if (S.walls.some(w => polyBox(w.pts, inflate(A, w.th / 2)))) put('warn', `${Name(a)}’s label sits across a wall. Drag it into the room, or choose Reset to automatic.`, [a.id]); }
+  // Label problems at one tag size: labels overlapping, a label over another bay's rug, a label across a wall.
+  const tagHits = (tw, th) => { const out = [], box = b => { const t = L.bays.get(b.id).tag; return cbox(t[0], t[1], tw, th); };
+    for (let i = 0; i < bays.length; i++){ const a = bays[i], A = box(a);
+      for (let j = 0; j < bays.length; j++){ if (j === i) continue; const b = bays[j];
+        if (j > i && interArea(A, box(b)) > 0.04 * tw * th) out.push({ k: 'tags', a, b });
+        let n = 0; for (let k = 0; k < 24; k++) if (inBox([b.x + Math.cos(k * Math.PI / 12) * b.r * 0.8, b.y + Math.sin(k * Math.PI / 12) * b.r * 0.8], A)) n++;
+        if (n >= 3 && cover(A, { t: 'c', x: b.x, y: b.y, r: b.r }) > 0.05) out.push({ k: 'rug', a, b }); }
+      if (S.walls.some(w => polyBox(w.pts, inflate(A, w.th / 2)))) out.push({ k: 'wall', a }); }
+    return out; };
+  const key = x => `${x.k}|${x.a.id}|${x.b ? x.b.id : ''}`, main = tagHits(tw, th), crowd = [];
+  for (const x of main){
+    if (x.k === 'wall') put('warn', `${Name(x.a)}’s label sits across a wall. Drag it into the room, or choose Reset to automatic.`, [x.a.id]);
+    else crowd.push(['warn', x.k === 'tags' ? `The labels for ${name(x.a)} and ${name(x.b)} overlap. Drag one, or choose Reset to automatic.` : `${Name(x.a)}’s label covers ${name(x.b)}. Drag the label, or choose Reset to automatic.`, [x.a.id, x.b.id]]); }
+  for (const b of bays){ const x = L.bays.get(b.id), A = tb(b);
+    if (x.lamp && boxDist(x.lamp, A) < 3) crowd.push(['warn', `${Name(b)}’s label covers its lantern, so staff can’t see it light up. Drag the label, or choose Reset to automatic.`, [b.id]]);
+    else if (chairCover(A, x.chair) > 0.1) crowd.push(['warn', `${Name(b)}’s label covers its own chair. Drag the label, or choose Reset to automatic.`, [b.id]]);
+    if (S.curts.some(c => c.pts.some((p, k) => k > 0 && segX([b.x, b.y], x.tag, c.pts[k - 1], p)))) crowd.push(['warn', `${Name(b)}’s label is on the other side of a curtain, so it reads as the next bay’s. Drag it back, or choose Reset to automatic.`, [b.id]]); }
   if (crowd.length > 3) put('warn', 'Bay labels crowd each other. In the tracker the labels stay the same size while the map shrinks to fit, so a wide map gets crowded. Leave out rooms and hallways with no bays, or move bays further apart.', [...new Set(crowd.flatMap(x => x[2]))]);
   else for (const x of crowd) put(...x);
+  // The Excel side pane draws the map about 300 px wide, where labels are larger for the map's size. Problems that only show there.
+  const seenK = new Set(main.map(key)), [pw, ph] = tagSize(L.box.w, PANE_D), pane = tagHits(pw, ph).filter(x => !seenK.has(key(x)));
+  if (pane.length > 3) put('warn', `In the Excel side pane the map is drawn small, so ${pane.length} bay labels run into each other, other bays or walls there. Move bays further apart, or leave out rooms with no bays. Preview › Task pane shows it.`, [...new Set(pane.flatMap(x => [x.a.id, ...(x.b ? [x.b.id] : [])]))]);
+  else for (const x of pane){ const reset = x.a.tag || (x.k === 'tags' && x.b.tag) ? ', or choose Reset to automatic' : '';
+    put('warn', `In the Excel side pane, ${x.k === 'tags' ? `the labels for ${name(x.a)} and ${name(x.b)} overlap. Drag one apart` : x.k === 'rug' ? `${name(x.a)}’s label covers ${name(x.b)}. Drag the label clear of it`
+      : `${name(x.a)}’s label sits across a wall. Drag it into the room`}${reset}. Preview › Task pane shows it.`, [x.a.id, ...(x.b ? [x.b.id] : [])]); }
   for (const c of m.items) if ((c.k === 'curtain' || (c.k === 'path' && c.layer === 'curtain')) && !(L.curtains.get(c.id) || []).length)
     put('warn', 'This curtain doesn’t screen any bay. Move it next to a bay, or tick its bays on the right.', [c.id]);
+  for (const c of m.items) if (Array.isArray(c.bays) && (c.k === 'curtain' || (c.k === 'path' && c.layer === 'curtain'))){
+    const got = L.curtains.get(c.id) || [], pls = c.k === 'path' ? flattenPath(c.d) : [polyOf(c)];
+    for (const pl of pls){ const s = besideOf(m, pl); if (!s[1] || !s[-1] || got.includes(s[1].id) === got.includes(s[-1].id)) continue;
+      const [y, n] = got.includes(s[1].id) ? [s[1], s[-1]] : [s[-1], s[1]];
+      put('tip', `This curtain sits between ${name(y)} and ${name(n)} but only screens ${name(y)}. Tick ${name(n)} on the right if it should close for both.`, [c.id]); break; } }
   if (hasWalls){ const wb = inflate(bbox(S.walls.flatMap(w => w.pts)), 3 * UNIT);
     for (const it of m.items){ if (it.k === 'wall' || isOpening(it) || (it.k === 'path' && it.layer === 'wall')) continue; const x = itemBox(m, it, L);
       if (!inBox([(x.x0 + x.x1) / 2, (x.y0 + x.y1) / 2], wb)) put('warn', `${itemName(m, it)} is far outside the walls. Drag it in or delete it.`, [it.id]); } }
@@ -1018,7 +1191,7 @@ const BM = { UNIT, GRID, PAD, WALL, THIN, SIZES, FURN, NAMES, BAY_RE,
   arcOf, segPath, segMid, bendAt, segsOf, polyOf, lineD, parsePath, pathStr, mapPath, movePath, flattenPath,
   newModel, cleanModel, nextId, nextBayNo, add, byId,
   doorD, windowD, wallD, wallAt, doorFit, hingeFor, newDoor, openingSeg,
-  wallLines, faceWall, nudgeBay, newBay, autoBay, autoCurtainBays, tagSize, layout, snap,
+  wallLines, faceWall, nudgeBay, newBay, autoBay, autoCurtainBays, tagPx, tagSize, TAG_D, PANE_D, layout, snap,
   newRoom, newLine, newItem, hugWall, moveItems, moveModel, rotateItems, remove, paste, dup, insertVertex, removeVertex, moveVertex,
   itemBox, nearSeg, hit, marquee, itemName, planOf, exportPlan, importPlan, check, canSave, templates, history, fmtFt, parseFt, normA };
 if (typeof module !== 'undefined' && module.exports) module.exports = BM; else root.BM = BM;

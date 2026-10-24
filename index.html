@@ -246,7 +246,7 @@ kbd{font:500 11.5px/1 var(--font);color:var(--muted);padding:4px 6px;border-radi
 .tool[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .tool[aria-pressed="true"] .ic{color:var(--accent)}
 .tool span{overflow:hidden;text-overflow:ellipsis}
-.tool kbd{margin-left:auto;color:var(--faint);background:transparent;padding:4px 2px}
+.tool kbd{margin-left:auto;color:var(--muted);background:transparent;padding:4px 2px}
 .tool.hl{box-shadow:0 0 0 2px var(--accent);color:var(--ink)}
 .rail hr{flex:none;width:calc(100% - 20px);height:1px;margin:6px 10px;border:0;background:var(--line)}
 
@@ -748,7 +748,7 @@ function drawModel(){
 }
 function drawTrace(){
   const T = S.trace;
-  $('#traceL').innerHTML = T ? `<image href="${T.src}" x="${T.x}" y="${T.y}" width="${T.w}" height="${T.h}" preserveAspectRatio="none" opacity="${T.op}"/>` : '';
+  $('#traceL').innerHTML = T ? `<image href="${esc(T.src)}" x="${T.x}" y="${T.y}" width="${T.w}" height="${T.h}" preserveAspectRatio="none" opacity="${T.op}"/>` : '';
 }
 const ptsD = pts => pts.length ? 'M' + pts.map(p => `${rnd(p[0])} ${rnd(p[1])}`).join('L') : '';
 // Outline of one item for hover and selection.
@@ -1078,7 +1078,7 @@ function finishLine(closed){
   if (!D){ updHint(); return; }
   const pts = D.pts.filter((p, i) => !i || dist(p, D.pts[i - 1]) > 0.5);
   if (pts.length < 2){ updHint(); paint(); return; }
-  const it = BM.add(S.m, BM.newLine(D.k, pts, closed));
+  const it = BM.add(S.m, BM.newLine(D.k, pts, closed, S.m));
   S.sel = [it.id]; commit(); updHint();
 }
 function placeDoor(e, p){
@@ -1097,11 +1097,26 @@ function traceDown(e, p){
   const T = S.trace; if (!T || T.lock) return;
   if (p[0] >= T.x && p[0] <= T.x + T.w && p[1] >= T.y && p[1] <= T.y + T.h) start(e, { k: 'tmove', x0: T.x, y0: T.y, p0: p });
 }
-// The picture stays in this browser (localStorage when it fits); it is never uploaded or put in the map file.
+// The picture stays in this browser; it is never uploaded or put in the map file. This site's storage is shared with ESK Tracker
+// and the other add-ins (about 5 MB in all, and they don't warn when it's full), so only a picture under TRACE_MAX characters is
+// kept there; a bigger one lasts until the page closes.
+const TRACE_MAX = 1e6;
 function saveTrace(){
   S.traceVer++; paint();
   if (!S.trace){ store.del(LS.trace); return; }
-  if (!store.set(LS.trace, S.trace) && !S.traceWarned){ S.traceWarned = true; toast('warn', 'This picture is too big to keep after you close the page. Your map is kept either way.'); }
+  if (S.trace.src.length <= TRACE_MAX && store.set(LS.trace, S.trace)) return;
+  store.del(LS.trace);
+  if (!S.traceWarned){ S.traceWarned = true; toast('warn', 'This picture is too big to keep after you close the page. Your map is kept either way.'); }
+}
+// A copy of the picture at most 2000 px on its long side, as a JPEG on white, small enough to keep (a phone photo is several MB).
+function shrinkImage(img){
+  try {
+    const k = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    let out = ''; for (const q of [0.8, 0.65, 0.5]){ out = c.toDataURL('image/jpeg', q); if (out.length <= TRACE_MAX) break; }
+    return out;
+  } catch { return img.src; }
 }
 function openImage(file){
   if (!file) return;
@@ -1110,7 +1125,7 @@ function openImage(file){
   const fr = new FileReader();
   fr.onload = () => { const img = new Image(); img.onload = () => {
       const iw = img.naturalWidth, ih = img.naturalHeight, b = contentBox(), w = b && S.m.items.length ? Math.max(b.x1 - b.x0, 600) : 1000;
-      S.trace = { src: fr.result, iw, ih, x: b && S.m.items.length ? b.x0 : 0, y: b && S.m.items.length ? b.y0 : 0, w: rnd(w), h: rnd(w * ih / iw), op: 0.5, lock: false };
+      S.trace = { src: shrinkImage(img), iw, ih, x: b && S.m.items.length ? b.x0 : 0, y: b && S.m.items.length ? b.y0 : 0, w: rnd(w), h: rnd(w * ih / iw), op: 0.5, lock: false };
       saveTrace(); setTool('trace'); fit();
       toast('ok', 'Picture added. Use <b>Set scale</b> so it matches real sizes, then lock it and draw over it.', 6000); };
     img.onerror = () => toast('bad', 'That picture can’t be opened. Try saving it as a PNG or JPG.'); img.src = fr.result; };
@@ -1387,7 +1402,7 @@ const ACT = {
   desel: () => { S.sel = []; S.vsel = null; renderInsp(); updHint(); paint(); },
   dup: () => dupSel(), del: () => delSel(),
   turnL: () => turnSel(-15), turnR: () => turnSel(15),
-  faceWall: () => { const b = sel1(); const a = BM.faceWall(S.m, b.x, b.y); BM.rotateItems(S.m, [b.id], BM.normA(a - (b.a || 0))); b.chair = null; b.table = null; commit(); },
+  faceWall: () => { const b = sel1(); const a = BM.faceWall(S.m, b.x, b.y, null, { r: b.r, skip: b.id }); BM.rotateItems(S.m, [b.id], BM.normA(a - (b.a || 0))); b.chair = null; b.table = null; commit(); },
   tagAuto: () => { sel1().tag = null; commit(); }, chairAuto: () => { sel1().chair = null; commit(); }, tableAuto: () => { sel1().table = null; commit(); },
   flip: () => flipSel(), hinge: () => { const d = sel1(); d.hinge = d.hinge === 'b' ? 'a' : 'b'; commit(); },
   straight: () => { const w = sel1(); w.bend = w.pts.map(() => 0); commit(); },
@@ -1498,7 +1513,7 @@ const MACT = {
 };
 function toast(kind, html, ms = 4000){
   const T = $('#toast'), el = document.createElement('div');
-  el.className = `msg ${kind}`; el.setAttribute('role', kind === 'bad' ? 'alert' : 'status'); el.innerHTML = html;
+  el.className = `msg fresh ${kind}`; el.setAttribute('role', kind === 'bad' ? 'alert' : 'status'); el.innerHTML = html;
   for (const o of [...T.children]) if (o.innerHTML === el.innerHTML) o.remove();
   T.appendChild(el);
   while (T.children.length > 2) T.firstElementChild.remove();
@@ -1787,6 +1802,8 @@ function boot(){
   window.matchMedia && matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (S.tab === 'preview') renderPreview(); });
   const d = store.get(LS.draft), m = d && BM.cleanModel(d.model), T = store.get(LS.trace);
   if (T && typeof T.src === 'string' && /^data:image\//.test(T.src) && [T.x, T.y, T.w, T.h, T.iw, T.ih].every(Number.isFinite)) S.trace = { ...T, op: clamp(+T.op || 0.5, 0.1, 1) };
+  // A picture an older version kept full size: shrink it and keep the small copy, which frees the shared storage.
+  if (S.trace && S.trace.src.length > TRACE_MAX){ const img = new Image(); img.onload = () => { if (S.trace){ S.trace.src = shrinkImage(img); saveTrace(); } }; img.src = S.trace.src; }
   setModel(m || BM.newModel('New bay map'), true);
   setTool('select'); S.saved = 'ok'; updStatus();
   requestAnimationFrame(() => { if (S.m.items.length || S.trace) fit(); else { S.view = { k: 1, x: 40, y: 40 }; updZoom(); paint(); } });
