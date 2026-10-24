@@ -171,7 +171,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
 .bplan .btag[data-state="late"] .dot{background:var(--bad)} .bplan .btag[data-state="late"] .s{color:var(--bad);font-weight:600}
 .bplan .btag[data-state="open"] .n{color:var(--muted)}
 .bplan .btag .tx{overflow:hidden;text-overflow:ellipsis}
-@container (max-width:560px){.bplan .btag .tx{display:none}.bplan .btag .s{margin-top:1px}}
+@container (max-width:560px){.bplan .btag{display:flex;align-items:center;gap:4px;max-width:19cqw}.bplan .btag .n{min-width:0}.bplan .btag .s{order:-1;flex:none;margin-top:0}.bplan .btag .tx{display:none}}
 .pg-today .bmap{container:bmap / inline-size}
 .bwrap{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);grid-template-areas:"map panel" "next panel";gap:0 18px;align-items:start}
 .bwrap>.bleft{grid-area:map}.bwrap>.bpanel{grid-area:panel}.bwrap>.bnext{grid-area:next}
