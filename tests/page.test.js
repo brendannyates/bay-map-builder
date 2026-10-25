@@ -64,7 +64,26 @@ t('a floor-plan picture is shrunk before it is kept; one still too big lasts for
   assert(len <= +max && kept.bmTrace && kept.bmTrace.length < 1.1e6, 'small copy kept');
   ctx.big(); assert(!kept.bmTrace, 'too big: not kept'); assert.strictEqual(toasts.length, 1, 'said once');
 });
-t('curtains are made with the model, so one drawn toward a wall bunches there', () => assert(/BM\.newLine\(D\.k, pts, closed, S\.m\)/.test(script)));
+t('Open a map file opens a map the tracker turned down from its edit model, and says what to fix', () => {
+  const fn = name => new RegExp(`\\nfunction ${name}\\([\\s\\S]*?\\n\\}\\n`).exec(script)[0];
+  const BM = require('../core.js'), R = require('../render.js');
+  const good = BM.exportPlan(BM.templates().find(x => x.id === 'two-rooms').model, { savedAt: '' });
+  const broken = JSON.parse(JSON.stringify(good)); broken.walls[0].d = 'not a path';
+  const noEdit = { ...broken }; delete noEdit.edit;
+  assert(R.bpCheck(broken).err && BM.importPlan(broken), 'the case: turned down, still has an edit model');
+  const open = x => {
+    const toasts = [], ctx = { BM, bpCheck: R.bpCheck, esc: R.bpEsc, S: { m: { items: [] } }, opened: null, toast: (k, h) => toasts.push([k, h]),
+      setModel(m){ ctx.opened = m; }, setTool(){}, fit(){}, requestAnimationFrame(){},
+      FileReader: function(){ this.readAsText = () => { this.result = JSON.stringify(x); this.onload(); }; } };
+    require('vm').runInNewContext(`${fn('openFile')}openFile({ name: 'map.json' });`, ctx);
+    return { opened: ctx.opened, toasts };
+  };
+  let r = open(good); assert(r.opened); assert.strictEqual(r.toasts[0][0], 'ok');
+  r = open(broken); assert(r.opened && r.opened.items.length, 'opens');
+  assert.strictEqual(r.toasts[0][0], 'warn'); assert(/A wall is malformed\. Fix it here, then download it again\./.test(r.toasts[0][1]), r.toasts[0][1]);
+  r = open(noEdit); assert(!r.opened, 'no edit model: nothing to open'); assert.deepStrictEqual(r.toasts, [['bad', 'A wall is malformed.']]);
+});
+t('curtains are made with the model, so one drawn toward a wall bunches there',() => assert(/BM\.newLine\(D\.k, pts, closed, S\.m\)/.test(script)));
 
 const esk = process.env.BM_SHARED && fs.readFileSync(process.env.BM_SHARED, 'utf8').replace(/\r\n/g, '\n');
 if (esk){

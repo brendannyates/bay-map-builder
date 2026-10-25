@@ -1538,10 +1538,13 @@ function openFile(file){
   const fr = new FileReader();
   fr.onload = () => {
     let x; try { x = JSON.parse(fr.result); } catch { return toast('bad', 'That file isn’t a bay map. Bay map files end in .json.'); }
-    const c = bpCheck(x); if (c.err) return toast('bad', esc(c.err));
-    const m = BM.importPlan(x); if (!m) return toast('bad', 'That map can’t be opened here.');
+    // A map the tracker turned down still opens from its edit model, so the practice lead can fix it here.
+    const m = BM.importPlan(x), c = bpCheck(x);
+    if (!m) return toast('bad', esc(c.err || 'That map can’t be opened here.'));
     const had = S.m.items.length; setModel(m, false); setTool('select'); requestAnimationFrame(() => fit());
-    toast('ok', `Opened “${esc(m.name || file.name)}”.${had ? ' Undo brings your previous map back.' : ''}`);
+    const undo = had ? ' Undo brings your previous map back.' : '';
+    if (c.err) return toast('warn', `The tracker can’t use this map: ${esc(c.err)} Fix it here, then download it again.${undo}`, 7000);
+    toast('ok', `Opened “${esc(m.name || file.name)}”.${undo}`);
   };
   fr.onerror = () => toast('bad', 'That file can’t be read.');
   fr.readAsText(file);
