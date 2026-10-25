@@ -1,6 +1,6 @@
-// The page: its script parses, it loads nothing from the web but office.js, and what it copies from ESK Tracker still matches.
+// The page: its script parses, it loads nothing from the web, it stands alone, and what it copies from ESK Tracker still matches.
 //   node tests/page.test.js
-//   BM_SHARED=".../esk-tracker/src/taskpane.html" node tests/page.test.js   (also compares the copied CSS and chunking code)
+//   BM_SHARED=".../esk-tracker/src/taskpane.html" node tests/page.test.js   (also compares the copied CSS)
 const assert = require('assert'), fs = require('fs'), path = require('path');
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8').replace(/\r\n/g, '\n');
@@ -8,11 +8,23 @@ const script = (html.match(/<script>\n([\s\S]*?)<\/script>/) || [])[1] || '';
 const style = id => (html.match(new RegExp(`<style id="${id}">\\n([\\s\\S]*?)</style>`)) || [])[1] || '';
 
 t('the page script parses', () => { assert(script.length > 1000); new Function(script); });
-t('only office.js comes from the web, and only when ESK opens the page as an Office dialog', () => {
-  const urls = [...html.matchAll(/https?:\/\/[^\s"'`)]+/g)].map(m => m[0]);
-  assert.deepStrictEqual([...new Set(urls)], ['https://appsforoffice.microsoft.com/lib/1/hosted/office.js']);
-  assert(!/<script[^>]+src="https?:/.test(html), 'no script tag loads from the web');
-  assert(/same = window\.parent !== window && window\.parent\.location\.origin === location\.origin/.test(script), 'framed by the tracker: no office.js');
+t('nothing comes from the web', () => {
+  assert.deepStrictEqual([...html.matchAll(/https?:\/\/[^\s"'`)]+/g)].map(m => m[0]), []);
+});
+t('the page stands alone: no tracker mode, no messages to a host, Download file finishes', () => {
+  for (const re of [/FROM_ESK/, /from=esk/, /\bOffice\b/, /office\.js/, /messageParent/, /postMessage/, /addEventListener\('message'/, /\bbm(Ready|Load|Save|Saved|Close)\b/, /Save to tracker/, /id="bClose"/, /S\.host\b/])
+    assert(!re.test(html), `still in the page: ${re}`);
+  assert(/<button type="button" class="btn primary" id="bSave">Download file<\/button>/.test(html));
+  assert(/\$\('#bSave'\)\.addEventListener\('click', download\)/.test(script), 'the button downloads');
+  assert(/K === 's'\)\{ e\.preventDefault\(\); download\(\); \}/.test(script), 'Ctrl+S downloads');
+  assert(/if \(!store\.get\(LS\.coach\)\) startCoach\(\);/.test(script), 'tips on first run');
+  assert(/open: \(\) => \$\('#fileIn'\)\.click\(\)/.test(script), 'Open a map file stays');
+});
+t('help, the Ready checklist, the Map panel and the download toast say where the file goes', () => {
+  for (const name of ['help', 'checklistHTML', 'mapHTML', 'download']){
+    const body = new RegExp(`\\nfunction ${name}\\([\\s\\S]*?\\n\\}\\n`).exec(script)[0];
+    assert(/in ESK Tracker › Settings › Bay map, choose (<b>)?Load a map file/i.test(body), name);
+  }
 });
 t('scripts load in order: render.js, core.js, then the page', () => {
   const i = html.indexOf('src="render.js"'), j = html.indexOf('src="core.js"'), k = html.indexOf('<script>\n');
@@ -60,9 +72,6 @@ if (esk){
   t('the tokens, fonts and bay map CSS are line-for-line copies of the tracker', () => {
     for (const id of ['tok', 'base', 'ctl', 'eskMap']) for (const l of style(id).split('\n')) if (l.trim()) assert(lines.has(l), `#${id} line not in the tracker: ${l.slice(0, 90)}`);
     for (const k of ['.bplan .wall{', '.bplan .btag{', '.bkey .bsw[data-k="busy"]{', ':root[data-theme="dark"]{', '.bplan .window .wf{']) assert(style('tok').includes(k) || style('eskMap').includes(k), k);
-  });
-  t('sendChunks, makeRx and CH match the tracker', () => {
-    for (const k of ['const CH = 12000;', 'function sendChunks(', 'function makeRx(']){ const a = script.split('\n').find(l => l.startsWith(k)), b = esk.split('\n').find(l => l.startsWith(k)); assert(a && b && a === b, k); }
   });
 }
 console.log(`\n${n} passed`);

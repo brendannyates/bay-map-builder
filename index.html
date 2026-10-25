@@ -222,7 +222,7 @@ input.nm:focus,input.cl:focus{background:var(--surface);outline:2px solid var(--
 input.nm::placeholder,input.cl::placeholder{color:var(--muted);font-weight:400}
 .status{display:flex;align-items:center;gap:7px;min-height:18px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
 .status i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
-.status.pend i{background:var(--faint)} .status.fail{color:var(--bad)} .status.fail i{background:var(--bad)} .status.dirty i{background:var(--warn)}
+.status.pend i{background:var(--faint)} .status.fail{color:var(--bad)} .status.fail i{background:var(--bad)}
 .tabs{flex:none;display:inline-flex;gap:2px;padding:3px;border-radius:13px;background:var(--surface2)}
 .tabs button{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 18px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-weight:500;cursor:pointer}
 .tabs button:hover{color:var(--ink)}
@@ -432,7 +432,6 @@ kbd{font:500 11.5px/1 var(--font);color:var(--muted);padding:4px 6px;border-radi
 .menu .mh{padding:8px 12px 4px;font-size:12.5px;color:var(--muted)}
 #toast{position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:30;display:flex;flex-direction:column;gap:6px;align-items:center;width:calc(100% - 24px);max-width:540px;pointer-events:none}
 #toast .msg{margin:0;width:100%;pointer-events:none;box-shadow:var(--shadow),0 4px 16px rgba(0,0,0,.12)}
-#busy{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:500;background:var(--wash);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -457,7 +456,6 @@ kbd{font:500 11.5px/1 var(--font);color:var(--muted);padding:4px 6px;border-radi
     <span class="vsep"></span>
     <button type="button" class="btn ghost mute" id="bFile" aria-haspopup="menu" aria-expanded="false">File</button>
     <button type="button" class="ib" id="bHelp" aria-label="Shortcuts and help" title="Shortcuts and help (?)"></button>
-    <button type="button" class="btn ghost mute" id="bClose" hidden>Close</button>
     <button type="button" class="btn primary" id="bSave">Download file</button>
   </header>
   <div class="work" id="work">
@@ -504,7 +502,6 @@ kbd{font:500 11.5px/1 var(--font);color:var(--muted);padding:4px 6px;border-radi
 <div id="menu" class="menu" role="menu" aria-labelledby="bFile" hidden></div>
 <div id="toast"></div>
 <div id="tip" role="tooltip" hidden></div>
-<div id="busy" hidden><span id="busyT"></span></div>
 <input type="file" id="fileIn" accept=".json,application/json" hidden>
 <input type="file" id="imgIn" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" hidden>
 <script src="render.js"></script>
@@ -516,7 +513,6 @@ kbd{font:500 11.5px/1 var(--font);color:var(--muted);padding:4px 6px;border-radi
 const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = bpEsc, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v)), rnd = n => Math.round(n * 10) / 10;
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI, dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-const FROM_ESK = new URLSearchParams(location.search).get('from') === 'esk';
 const LS = { draft: 'bmDraft', prefs: 'bmPrefs', coach: 'bmCoach', trace: 'bmTrace' };
 const store = {
   get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -528,7 +524,7 @@ const S = {
   m: BM.newModel('New bay map'), hist: BM.history(200), ver: 0, drawn: -1, sel: [], vsel: null, tool: 'select', tab: 'draw',
   view: { k: 1, x: 40, y: 40 }, drag: null, draw: null, hover: null, ghost: null, guides: [], space: false, pinch: null,
   prefs: { snap: true, grid: true, theme: '', ...(store.get(LS.prefs) || {}) }, ferr: {},
-  issues: [], host: null, hostBays: [], savedSig: null, dirty: false, saving: false, clip: null, pasteN: 0,
+  issues: [], clip: null, pasteN: 0,
   trace: null, traceVer: 0, traced: -1, scale: null, coach: -1, pv: { w: 'wide', theme: '' }, saved: 'ok',
 };
 
@@ -615,7 +611,6 @@ function setTool(id){
 
 // ---------- model changes ----------
 const sel1 = () => S.sel.length === 1 ? BM.byId(S.m, S.sel[0]) : null;
-const sig = m => { try { const P = BM.exportPlan(m, { savedAt: '' }); return JSON.stringify({ ...P, savedAt: '', savedBy: '' }); } catch { return ''; } };
 // Something changed but isn't finished (a drag, typing): redraw only.
 function touch(){ S.ver++; paint(); }
 // A finished change: one undo step, autosave, recheck, redraw.
@@ -650,26 +645,19 @@ function autosave(){
 }
 function updStatus(){
   const el = $('#status'), t = $('#status span');
-  el.className = 'status' + (S.saved === 'fail' ? ' fail' : S.dirty ? ' dirty' : '');
-  t.textContent = S.saved === 'fail' ? 'Couldn’t save on this computer. Download the file to keep it.'
-    : S.saving ? 'Saving to the tracker…' : S.dirty ? 'Not in the tracker yet' : S.host ? (S.hostBuiltIn ? 'The tracker has its built-in map' : 'Saved in the tracker') : 'Saved on this computer';
-  el.title = S.saved === 'fail' ? '' : S.host ? 'Your work is also kept on this computer until you save it to the tracker.' : 'Kept in this browser. Download the file to use it in the tracker.';
+  el.className = 'status' + (S.saved === 'fail' ? ' fail' : '');
+  t.textContent = S.saved === 'fail' ? 'Couldn’t save on this computer. Download the file to keep it.' : 'Saved on this computer';
+  el.title = S.saved === 'fail' ? '' : 'Kept in this browser. Download the file to use it in the tracker.';
 }
 
 // ---------- checks ----------
 function scheduleCheck(){ clearTimeout(S.ckT); S.ckT = setTimeout(runCheck, 160); }
-// The checklist: core.check() plus, when the tracker opened us, bays that today's visits use but this map lacks.
+// The checklist comes from core.check().
 function runCheck(){
   let L;
   try { L = BM.check(S.m); } catch (e){ console.error(e); L = [{ level: 'error', msg: 'Something on the map can’t be checked. Undo the last change, or delete what you just added.', ids: [] }]; }
-  if (S.hostBays.length && S.m.items.some(i => i.k === 'bay')){
-    const have = new Set(S.m.items.filter(i => i.k === 'bay').map(b => String(b.no ?? '').trim().toLowerCase()));
-    const miss = S.hostBays.filter(b => !have.has(String(b).toLowerCase()));
-    if (miss.length) L.push({ level: 'warn', msg: `Today’s visits use ${miss.length > 1 ? 'bays' : 'Bay'} ${miss.join(', ')}, which ${miss.length > 1 ? 'aren’t' : 'isn’t'} on this map. Those visits show under the map until their bay is changed.`, ids: [] });
-  }
   S.issues = S.m.items.length ? L : [];
   L = S.issues;
-  if (S.host) S.dirty = sig(S.m) !== S.savedSig;
   const bad = L.filter(x => x.level === 'error').length, warn = L.filter(x => x.level === 'warn').length, c = $('#pvCnt');
   c.hidden = !(bad || warn); c.textContent = bad || warn; c.className = 'cnt' + (bad ? ' bad' : '');
   c.setAttribute('aria-label', bad ? `${bad} to fix` : `${warn} to look at`);
@@ -1166,7 +1154,7 @@ function onKey(e){
     const K = k.toLowerCase();
     if (K === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (K === 'y'){ e.preventDefault(); redo(); }
-    else if (K === 's'){ e.preventDefault(); primary(); }
+    else if (K === 's'){ e.preventDefault(); download(); }
     else if (K === '0'){ e.preventDefault(); fit(); }
     else if (K === '=' || K === '+'){ e.preventDefault(); zoomBy(1.25); }
     else if (K === '-'){ e.preventDefault(); zoomBy(0.8); }
@@ -1337,7 +1325,7 @@ function checklistHTML(){
   const L = S.issues, bad = L.filter(x => x.level === 'error').length, warn = L.filter(x => x.level === 'warn').length;
   const sum = [bad ? `${bad} to fix` : '', warn ? `${warn} to look at` : ''].filter(Boolean).join(', ');
   const body = !S.m.items.length ? '<p class="sub" style="margin-top:6px">Problems show up here as you draw.</p>'
-    : !L.length ? `<div class="ready">${icon('check')}<div><b>Ready for the tracker</b><p>Nothing to fix. ${S.tab === 'preview' ? 'If it looks right' : 'Look at Preview, then'} ${S.host ? 'Save to tracker' : 'Download file'}.</p></div></div>`
+    : !L.length ? `<div class="ready">${icon('check')}<div><b>Ready for the tracker</b><p>Nothing to fix. ${S.tab === 'preview' ? 'If it looks right' : 'Look at Preview, then'} Download file. In ESK Tracker › Settings › Bay map, choose Load a map file.</p></div></div>`
     : `<ul class="issues">${L.map((x, i) => `<li><button type="button" class="iss ${x.level}${x.ids.length ? '' : ' nolink'}" data-act="issue" data-i="${i}">${icon(x.level)}<span>${esc(x.msg)}</span></button></li>`).join('')}</ul>`;
   return `<div class="ph"><h2>Checklist${sum ? ` <small>${sum}</small>` : ''}</h2></div>${body}`;
 }
@@ -1352,7 +1340,7 @@ function mapHTML(){
     ${facts ? `<p class="help" style="margin-top:12px">${facts}</p>` : ''}
     <div style="margin-top:8px">${chk('snap', 'Snap to the grid and corners', S.prefs.snap, 'Hold Alt while you drag to place things freely.')}${chk('grid', 'Show the grid', S.prefs.grid, 'Small squares are 6 in, big squares 4 ft.')}</div>
   </section>
-  ${S.host ? '' : '<div class="msg info note">Download the file, then in ESK Tracker › Settings › Bay map choose Load a map file.</div>'}
+  <div class="msg info note">Download the file. Then in ESK Tracker › Settings › Bay map, choose Load a map file.</div>
   ${list.length ? `<details class="panel everything"${S.listOpen ? ' open' : ''}><summary>Everything on the map <span class="clsum">${list.length}</span></summary><ul>${list.map(it => `<li><button type="button" data-act="pick" data-id="${esc(it.id)}">${esc(BM.itemName(m, it))}</button></li>`).join('')}</ul></details>` : ''}`;
 }
 function traceHTML(){
@@ -1507,9 +1495,6 @@ const MACT = {
   scaleGo: () => scaleGo(),
   tpl: el => useTemplate(el.dataset.id),
   coachAgain: () => { closeModal(); startCoach(); },
-  keepDraft: () => { const f = S.keepFn; S.modalO = { ...S.modalO, onClose: null }; closeModal(); f(true); },
-  useHost: () => { const f = S.keepFn; S.modalO = { ...S.modalO, onClose: null }; closeModal(); f(false); },
-  closeAnyway: () => { S.modalO = { ...S.modalO, onClose: null }; closeModal(); hostSend({ ev: 'bmClose' }); },
 };
 function toast(kind, html, ms = 4000){
   const T = $('#toast'), el = document.createElement('div');
@@ -1519,7 +1504,6 @@ function toast(kind, html, ms = 4000){
   while (T.children.length > 2) T.firstElementChild.remove();
   setTimeout(() => el.remove(), ms);
 }
-function busy(t){ $('#busy').hidden = !t; $('#busyT').textContent = t || ''; }
 
 // ---------- templates, files ----------
 // A static tracker-style drawing of a plan with every bay open (template pictures).
@@ -1562,7 +1546,7 @@ function openFile(file){
   fr.onerror = () => toast('bad', 'That file can’t be read.');
   fr.readAsText(file);
 }
-// Errors in the checklist block saving and downloading; point the practice lead at them.
+// Errors in the checklist block downloading; point the practice lead at them.
 function blocked(){
   const n = S.issues.filter(x => x.level === 'error').length; if (!n) return false;
   if (S.tab !== 'draw') setTab('draw'); if (S.tool !== 'select') setTool('select'); S.sel = []; renderInsp(); updHint(); paint();
@@ -1573,20 +1557,20 @@ function download(){
   const P = BM.exportPlan(S.m, { savedAt: new Date().toISOString() }), name = String(S.m.name || 'New bay map').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'New bay map';
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(P, null, 2)], { type: 'application/json' })); a.download = `Bay map - ${name}.json`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  toast('ok', S.host ? 'File downloaded.' : 'File downloaded. In ESK Tracker › Settings › Bay map choose <b>Load a map file</b>.', 7000);
+  toast('ok', 'File downloaded. In ESK Tracker › Settings › Bay map, choose <b>Load a map file</b>.', 7000);
 }
 function startOver(){
   ask('Start over?', 'Everything on the page is cleared. Download the file first if you may want this map again.', 'Start over', () => {
     setModel(BM.newModel('New bay map'), true); S.sel = []; setTool('select'); S.view = { k: 1, x: 40, y: 40 }; updZoom(); paint(); renderInsp(); }, { bad: true });
 }
-const primary = () => S.host ? saveToTracker() : download();
 function help(){
   const row = (k, t) => `<div><span>${t}</span><span>${k.split(' ').map(x => `<kbd>${x}</kbd>`).join('')}</span></div>`;
   modal(`<h2 id="mh">Shortcuts</h2><p class="muted">Letters pick a tool. Nothing here is needed: every action also has a button.</p>
+    <p class="muted">When the map is ready, choose <b>Download file</b>. Then in ESK Tracker › Settings › Bay map, choose <b>Load a map file</b>. To change a map later, open its file here with File › Open a map file.</p>
     <div class="keys"><h3>Tools</h3>${TOOLS.filter(t => t !== '-').map(t => row(t.key, t.name)).join('')}
     <h3>Changing things</h3>${[['Ctrl+Z', 'Undo'], ['Ctrl+Y', 'Redo'], ['Ctrl+C Ctrl+V', 'Copy, paste'], ['Ctrl+D', 'Duplicate'], ['Delete', 'Delete'], ['Arrows', 'Nudge (Shift: further)'],
       ['R', 'Turn 15° (Shift: 90°)'], ['F', 'Swing a door the other way'], ['Enter', 'Finish a wall or curtain'], ['Esc', 'Take back a corner, or stop'],
-      ['Shift', 'Any angle while drawing'], ['Alt', 'No snapping while dragging'], ['+ − 0', 'Zoom in, out, fit'], ['Ctrl+S', S.host ? 'Save to tracker' : 'Download file']].map(([k, t]) => row(k, t)).join('')}</div>
+      ['Shift', 'Any angle while drawing'], ['Alt', 'No snapping while dragging'], ['+ − 0', 'Zoom in, out, fit'], ['Ctrl+S', 'Download file']].map(([k, t]) => row(k, t)).join('')}</div>
     <div class="row end"><button type="button" class="btn ghost" data-act="coachAgain">Show the getting-started tips again</button><button type="button" class="btn primary" data-act="close">Close</button></div>`, { wide: true });
 }
 
@@ -1678,91 +1662,6 @@ function onPvClick(e){
   if (b.dataset.act && ACT[b.dataset.act]) ACT[b.dataset.act](b);
 }
 
-// ---------- ESK Tracker link ----------
-// Same chunking as ESK (sendChunks/makeRx), so long plans fit through Office's message size limit.
-const CH = 12000;
-function sendChunks(fn, obj){ const s = JSON.stringify(obj); const id = Math.random().toString(36).slice(2); const n = Math.max(1, Math.ceil(s.length / CH)); for (let i = 0; i < n; i++) fn(JSON.stringify({ c: id, i, n, d: s.slice(i * CH, (i + 1) * CH) })); }
-function makeRx(handler){ const buf = {}; return str => { let m; try { m = JSON.parse(str); } catch { return; } if (!m || !m.c) return; const b = buf[m.c] || (buf[m.c] = []); b[m.i] = m.d; if (b.filter(x => x != null).length === m.n){ delete buf[m.c]; try { handler(JSON.parse(b.join(''))); } catch (e){ console.error(e); } } }; }
-function hostSend(obj){
-  try {
-    if (S.host === 'office') sendChunks(s => Office.context.ui.messageParent(s), obj);
-    else if (S.host === 'frame') window.parent.postMessage(obj, location.origin);
-  } catch (e){ console.error(e); }
-}
-// Opened with ?from=esk: as an in-page frame from the tracker (same site), or as an Office dialog. Anything else is standalone.
-function connectHost(){
-  if (!FROM_ESK) return;
-  let same = false; try { same = window.parent !== window && window.parent.location.origin === location.origin; } catch {}
-  if (same){
-    S.host = 'frame';
-    window.addEventListener('message', e => { if (e.source === window.parent && e.origin === location.origin) onHost(e.data); });
-    return hostReady();
-  }
-  // office.js is loaded here, not in <head>: inside the tracker page's frame it would navigate the frame away, and on its own
-  // the page doesn't need it. If it can't load (offline), the page simply works on its own.
-  const js = document.createElement('script');
-  js.src = 'https://appsforoffice.microsoft.com/lib/1/hosted/office.js';
-  js.onload = () => { if (!window.Office || !Office.onReady) return;
-    Office.onReady(() => {
-      if (!Office.context || !Office.context.ui || typeof Office.context.ui.messageParent !== 'function') return;
-      S.host = 'office'; const rx = makeRx(onHost);
-      try { Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, a => rx(a.message), () => hostReady()); } catch { hostReady(); }
-    }); };
-  document.head.appendChild(js);
-}
-function hostReady(){
-  $('#bClose').hidden = false; $('#bSave').textContent = 'Save to tracker'; updStatus(); renderInsp();
-  busy('Opening the map from ESK Tracker…');
-  S.loadT = setTimeout(() => { busy(''); if (!S.loaded){ S.host = null; $('#bClose').hidden = true; $('#bSave').textContent = 'Download file'; updStatus(); renderInsp(); toast('warn', 'ESK Tracker didn’t answer, so you’re working on this computer only. Download the file when you’re done.', 8000); } }, 8000);
-  hostSend({ ev: 'bmReady' });
-}
-function onHost(m){
-  if (!m || typeof m !== 'object') return;
-  if (m.ev === 'bmLoad') return hostLoad(m);
-  if (m.ev === 'bmSaved') return hostSaved(m);
-}
-// The tracker's map (or the built-in one, as editable walls) becomes the starting point, unless this computer has newer changes.
-function hostLoad(msg){
-  clearTimeout(S.loadT); busy(''); S.loaded = true; S.hostBuiltIn = !msg.plan;
-  S.hostBays = Array.isArray(msg.bays) ? msg.bays.map(String).filter(Boolean) : [];
-  let hm = msg.plan ? BM.importPlan(msg.plan) : null;
-  if (msg.plan && !hm) toast('warn', 'The tracker’s map couldn’t be opened here, so this starts from the built-in rooms.');
-  if (!hm){ hm = JSON.parse(JSON.stringify(BM.templates().find(t => t.id === 'two-rooms').model)); hm.name = 'ESK rooms'; }
-  S.savedSig = sig(hm);
-  const d = store.get(LS.draft), dm = d && BM.cleanModel(d.model);
-  const go = keep => { setModel(keep ? dm : hm, true); setTool('select'); requestAnimationFrame(() => fit()); scheduleCheck(); };
-  if (dm && dm.items.length && sig(dm) !== S.savedSig){
-    S.keepFn = go;
-    const when = d.at ? new Date(d.at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'earlier';
-    modal(`<h2 id="mh">Pick up where you left off?</h2><p class="muted">This computer has changes from ${esc(when)} that aren’t in the tracker yet.</p>
-      <div class="row end"><button type="button" class="btn ghost" data-act="useHost">Use the tracker’s map</button><button type="button" class="btn primary" data-act="keepDraft">Keep my changes</button></div>`, { onClose: () => go(true) });
-  } else go(false);
-}
-function saveToTracker(){
-  if (S.saving) return;
-  runCheck(); if (blocked()) return;
-  const c = bpCheck(BM.exportPlan(S.m, { savedAt: new Date().toISOString() }));
-  if (c.err) return toast('bad', esc(c.err));
-  S.saving = true; S.pendSig = sig(S.m); $('#bSave').disabled = true; $('#bSave').textContent = 'Saving…'; updStatus();
-  S.saveT = setTimeout(() => hostSaved({ ok: false, err: 'The tracker didn’t answer. Try again, or download the file and load it in Settings › Bay map.' }), 20000);
-  hostSend({ ev: 'bmSave', plan: c.plan });
-}
-function hostSaved(m){
-  clearTimeout(S.saveT); if (!S.saving) return;
-  S.saving = false; $('#bSave').disabled = false; $('#bSave').textContent = 'Save to tracker';
-  if (m.ok){ S.savedSig = S.pendSig; S.hostBuiltIn = false; S.dirty = sig(S.m) !== S.savedSig;
-    toast('ok', 'Saved to the tracker. Everyone using this workbook now sees this map.', 6000);
-    if (m.warn) toast('warn', esc(m.warn), 9000); }
-  else toast('bad', esc(m.err || 'The tracker couldn’t save the map.'), 9000);
-  updStatus();
-}
-function closeHost(){
-  runCheck();
-  if (S.dirty) return modal(`<h2 id="mh">Close without saving to the tracker?</h2><p class="muted">Your changes stay on this computer, so you can pick them up next time.</p>
-    <div class="row end"><button type="button" class="btn ghost" data-act="close">Keep editing</button><button type="button" class="btn primary" data-act="closeAnyway">Close</button></div>`);
-  hostSend({ ev: 'bmClose' });
-}
-
 // ---------- start ----------
 function boot(){
   applyTheme(); buildRail();
@@ -1790,7 +1689,7 @@ function boot(){
   document.addEventListener('pointerdown', e => { if (!$('#menu').hidden && !e.target.closest('#menu,#bFile')) closeMenu(false); });
   $('#bFile').addEventListener('click', () => $('#menu').hidden ? openMenu() : closeMenu());
   $('#bUndo').addEventListener('click', undo); $('#bRedo').addEventListener('click', redo); $('#bHelp').addEventListener('click', help);
-  $('#bSave').addEventListener('click', primary); $('#bClose').addEventListener('click', closeHost);
+  $('#bSave').addEventListener('click', download);
   $('#zIn').addEventListener('click', () => zoomBy(1.25)); $('#zOut').addEventListener('click', () => zoomBy(0.8)); $('#zFit').addEventListener('click', () => fit());
   for (const [id, f] of [['#mName', 'name'], ['#mClinic', 'clinic']]){ const el = $(id);
     el.addEventListener('input', () => setF(f, el.value, false)); el.addEventListener('change', () => setF(f, el.value, true)); }
@@ -1807,8 +1706,7 @@ function boot(){
   setModel(m || BM.newModel('New bay map'), true);
   setTool('select'); S.saved = 'ok'; updStatus();
   requestAnimationFrame(() => { if (S.m.items.length || S.trace) fit(); else { S.view = { k: 1, x: 40, y: 40 }; updZoom(); paint(); } });
-  if (!store.get(LS.coach) && !FROM_ESK) startCoach();   // from the tracker there is already a map; the tips would cover it (? › tips again)
-  connectHost();
+  if (!store.get(LS.coach)) startCoach();
 }
 boot();
 </script>
