@@ -1283,7 +1283,7 @@ const INSP = {
   chair: c => `<div class="lbl">Direction</div>${dialHTML(c.a || 0)}<p class="help">A spare recliner. To make it a bay, delete it and add a Bay instead.</p>`,
   table: t => `${seg('shape', 'Shape', [['round', 'Round'], ['square', 'Square']], t.shape)}${txt('ts', 'Size', BM.fmtFt(t.s))}${t.shape === 'square' ? turnBtns() : ''}`,
   label: l => `${txt('t', 'Text', l.t ?? '', { live: true, attrs: 'maxlength="40"' })}${chk('small', 'Smaller text', !!l.small, 'For notes like “Nurse station”.')}`,
-  path: p => `<p class="sub">This came from the built-in map, so it moves and deletes as one piece. To change its shape, draw a new ${p.layer === 'curtain' ? 'curtain' : p.layer} and delete this one, or start from the template “Two rooms, 5 bays”, which has the same rooms drawn with real walls.</p>`,
+  path: p => `<p class="sub">This came from a map drawn before the builder, so it moves and deletes as one piece. To change its shape, draw a new ${p.layer === 'curtain' ? 'curtain' : p.layer} and delete this one, or start from the template “Two rooms, 5 bays”, which has the same rooms drawn with real walls.</p>`,
 };
 const turnBtns = () => '<div class="btns"><button type="button" class="btn sm" data-act="turnL">' + icon('rotL') + 'Turn left</button><button type="button" class="btn sm" data-act="turnR">' + icon('rotR') + 'Turn right</button></div>';
 for (const k of Object.keys(BM.FURN)) INSP[k] = f => `<div class="two" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div>${txt('fw', 'Width', BM.fmtFt(f.w))}</div><div>${txt('fh', 'Depth', BM.fmtFt(f.h))}</div></div>${turnBtns()}<div class="btns"><button type="button" class="btn sm" data-act="hug">Line up with the nearest wall</button></div>`;
@@ -1569,7 +1569,7 @@ function startOver(){
 function help(){
   const row = (k, t) => `<div><span>${t}</span><span>${k.split(' ').map(x => `<kbd>${x}</kbd>`).join('')}</span></div>`;
   modal(`<h2 id="mh">Shortcuts</h2><p class="muted">Letters pick a tool. Nothing here is needed: every action also has a button.</p>
-    <p class="muted">When the map is ready, choose <b>Download file</b>. Then in ESK Tracker › Settings › Bay map, choose <b>Load a map file</b>. To change a map later, open its file here with File › Open a map file.</p>
+    <p class="muted">When the map is ready, choose <b>Download file</b>. Then in ESK Tracker › Settings › Bay map, choose <b>Load a map file</b>. A tracker shows no bay map until one is loaded there. To change a map later, open its file here with File › Open a map file.</p>
     <div class="keys"><h3>Tools</h3>${TOOLS.filter(t => t !== '-').map(t => row(t.key, t.name)).join('')}
     <h3>Changing things</h3>${[['Ctrl+Z', 'Undo'], ['Ctrl+Y', 'Redo'], ['Ctrl+C Ctrl+V', 'Copy, paste'], ['Ctrl+D', 'Duplicate'], ['Delete', 'Delete'], ['Arrows', 'Nudge (Shift: further)'],
       ['R', 'Turn 15° (Shift: 90°)'], ['F', 'Swing a door the other way'], ['Enter', 'Finish a wall or curtain'], ['Esc', 'Take back a corner, or stop'],

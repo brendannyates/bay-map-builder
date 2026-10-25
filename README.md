@@ -15,6 +15,9 @@ goes across as a file.
 2. Clear the checklist on the right, check **Preview**, then **Download file**.
 3. In ESK Tracker › Settings › Bay map, choose **Load a map file**.
 
+A tracker shows no bay map until one is loaded in Settings › Bay map: there is no built-in map to fall back on. The
+**San Rafael ESK rooms** template is the map San Rafael’s tracker drew before maps were loaded from files.
+
 To change a map later, download it from the tracker (Settings › Bay map › **Download this map**), open it here with
 File › **Open a map file**, then download and load it again.
 

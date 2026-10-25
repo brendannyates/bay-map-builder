@@ -504,9 +504,10 @@ t('check: more bays than the tracker allows is an error', () => {
   assert(BM.check(m).some(x => x.level === 'error' && x.msg === 'The map has more than 40 bays. Remove some.'));
 });
 t('templates: fresh copies, and every non-blank one is ready to save with nothing to fix, side pane included', () => {
-  const a = BM.templates(), b = BM.templates(); assert.deepStrictEqual(a.map(x => x.id), ['blank', 'one-room', 'two-rooms', 'esk']);
+  const a = BM.templates(), b = BM.templates(); assert.deepStrictEqual(a.map(x => x.id), ['blank', 'one-room', 'two-rooms', 'san-rafael']);
   a[1].model.items.pop(); assert.notStrictEqual(a[1].model.items.length, b[1].model.items.length);
   for (const x of b.slice(1)) assert.deepStrictEqual(BM.check(x.model).filter(c => c.level !== 'tip'), [], x.id);
+  const sr = b.find(x => x.id === 'san-rafael'); assert.strictEqual(sr.name, 'San Rafael ESK rooms'); assert.strictEqual(sr.model.name, 'San Rafael ESK rooms');
 });
 
 t('loads as plain browser scripts: render.js then core.js gives a working global BM', () => {

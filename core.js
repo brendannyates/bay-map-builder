@@ -1007,7 +1007,7 @@ function exportPlan(model, o = {}){
   return { ...plan, w: W, h: H, savedAt: o.savedAt ?? new Date().toISOString(), savedBy: str(o.savedBy || '', 80), edit: mt };
 }
 // A model from a plan file: its own edit model when present and sound, else its drawing turned into movable shapes and bays
-// (so the built-in map or any map from the tracker can be edited). Chairs and tables found on a rug are pinned to that bay.
+// (so a map drawn before the builder, like San Rafael’s, or any map from the tracker can be edited). Chairs and tables found on a rug are pinned to that bay.
 function importPlan(plan){
   const e = plan && cleanModel(plan.edit); if (e) return e;
   const ok = R.bpCheck(plan); if (ok.err) return null;
@@ -1128,8 +1128,9 @@ function check(m){
 const canSave = m => !check(m).some(x => x.level === 'error');
 
 // ---------- templates ----------
-// Starting points. "Two rooms, 5 bays" is the built-in ESK map redrawn with real walls, doors and curtains (chairs, tables and tags
-// pinned where the ESK drawing has them), so saving it unchanged looks like the map the tracker shows today.
+// Starting points. "Two rooms, 5 bays" is San Rafael’s ESK map (BP_DEFAULT) redrawn with real walls, doors and curtains (chairs, tables
+// and tags pinned where the ESK drawing has them), so saving it unchanged looks like the map San Rafael’s tracker drew.
+// "San Rafael ESK rooms" is that drawing exactly as it is.
 function eskRooms(){
   const m = newModel('ESK rooms'), wall = add(m, { id: '', k: 'wall', pts: [[22, 50], [800, 50], [800, 372], [22, 372]], bend: [0, 0, 0, 0], closed: true, thin: false });
   add(m, { id: '', k: 'wall', pts: [[418, 50], [418, 372]], bend: [0, 0], closed: false, thin: false });
@@ -1163,8 +1164,8 @@ function templates(){
   return [
     { id: 'blank', name: 'Blank', desc: 'An empty page. Start with Room (R).', model: newModel('New bay map') },
     { id: 'one-room', name: 'One room, 4 bays', desc: 'A treatment room with four bays along the back wall and curtains between them.', model: oneRoom() },
-    { id: 'two-rooms', name: 'Two rooms, 5 bays', desc: 'The ESK layout the tracker shows today, drawn with walls, doors and curtains you can change.', model: eskRooms() },
-    { id: 'esk', name: 'Current ESK map (built-in)', desc: 'The built-in map exactly as it is. Its walls and curtains move as one piece and can’t be reshaped.', model: importPlan(R.BP_DEFAULT) },
+    { id: 'two-rooms', name: 'Two rooms, 5 bays', desc: 'San Rafael’s two ESK rooms, drawn with walls, doors and curtains you can change.', model: eskRooms() },
+    { id: 'san-rafael', name: 'San Rafael ESK rooms', desc: 'The map San Rafael’s tracker drew before maps were loaded from files, exactly as it was. Its walls and curtains move as one piece and can’t be reshaped.', model: importPlan({ ...R.BP_DEFAULT, name: 'San Rafael ESK rooms' }) },
   ];
 }
 
